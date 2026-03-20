@@ -1,64 +1,73 @@
 function doPost(e) {
-  var idArchivo = "GOOGLE-SHEETS-ID";
+  var idArchivo = "GOOGLE-SHEETS-ID"; 
   var ss = SpreadsheetApp.openById(idArchivo);
   var sheet = ss.getSheets()[0];
   
   var data = JSON.parse(e.postData.contents);
   var texto = data.texto || "";
-  var titulo = data.banco || ""; //
+  var titulo = data.banco || ""; 
   var fecha = new Date();
 
-  // 1. EXTRAE EL VALOR
-  var montoMatch = texto.match(/\$\s?([0-9.,]+)/);
-  var valorStr = montoMatch ? montoMatch[1].replace(/\./g, "").replace(/,/g, "") : "0";
-  var valorNum = parseFloat(valorStr);
+  // 0. FILTRO DE RECHAZOS ---
+  if (/rechaz|negad|fallid/i.test(titulo + texto)) {
+    return ContentService.createTextOutput("Operación rechazada - Ignorada");
+  }
 
-  // 2. DETERMINAR SIGNO Y CATEGORÍA (Basado en el TÍTULO y TEXTO)
-  // Buscamos "Envío" o "Recibiste" sin importar mayúsculas/minúsculas
-  var esEgreso = /envío|pagaste|compra/i.test(titulo) || /envío|pagaste|compra/i.test(texto);
-  var esIngreso = /recibiste|llegó/i.test(titulo) || /recibiste|llegó/i.test(texto);
-
+  var valorNum = 0;
+  var comercio = "";
   var categoria = "Otros";
-  if (esEgreso) {
-    valorNum = valorNum * -1;
-    categoria = "Gastos";
-  } else if (esIngreso) {
-    categoria = "Ingresos";
-  }
-
-  // 3. EXTRAER NOMBRE PARA OBSERVACIONES
+  var producto = "Lulo";
   var observaciones = "";
-  var comercio = "Lulo App";
-  
-  // Expresión para capturar el nombre después de " a " o " de "
-  var nombreMatch = texto.match(/(?:\s(?:a|de)\s)([^.]+)/i);
-  if (nombreMatch && nombreMatch[1]) {
-    var nombrePersona = nombreMatch[1].split(" Y lo mejor")[0].trim();
-    observaciones = (valorNum < 0 ? "Enviado a: " : "Recibido de: ") + nombrePersona;
+
+  // 1. LÓGICA PARA SMS (BANCOLOMBIA) ---
+  if (texto.includes("Bancolombia:")) {
+    var montoMatch = texto.match(/COP\s?([0-9.,]+)/);
+    var valorStr = montoMatch ? montoMatch[1].replace(/\./g, "").replace(/,/g, ".") : "0";
+    valorNum = parseFloat(valorStr) * -1;
+
+    if (texto.includes(" en ") && texto.includes(" con ")) {
+      comercio = texto.split(" en ")[1].split(" con ")[0].trim();
+    }
+    
+    categoria = "Gastos";
+    producto = "T.Crédito Bancolombia";
+    observaciones = "SMS Recibido";
+  } 
+
+  // 2. LÓGICA PARA NOTIFICACIONES (LULO) ---
+  else {
+    var montoMatch = texto.match(/\$\s?([0-9.,]+)/);
+    var valorStr = montoMatch ? montoMatch[1].replace(/\./g, "").replace(/,/g, "") : "0";
+    valorNum = parseFloat(valorStr);
+
+    var esEgreso = /envío|pagaste|compra|pago/i.test(titulo + texto);
+    var esIngreso = /recibiste|llegó/i.test(titulo + texto);
+    var esBreB = /bre-b/i.test(titulo + texto);
+
+    if (esEgreso) {
+      valorNum = valorNum * -1;
+      categoria = esBreB ? "Transferencia Enviada" : "Gastos";
+    } else if (esIngreso) {
+      categoria = esBreB ? "Transferencia Recibida" : "Ingresos";
+    }
+
+    // Comercio raw
+    if (esBreB) {
+      comercio = "Bre-B";
+      var nMatch = texto.match(/(?:\s(?:a|de)\s)([^.]+)/i);
+      if (nMatch) observaciones = nMatch[1].trim();
+    } else if (texto.includes(" por ")) {
+      comercio = texto.split(" por ")[0].trim();
+    } else {
+      comercio = "Lulo App";
+      var nMatch = texto.match(/(?:\s(?:a|de)\s)([^.$]+)/i);
+      if (nMatch) observaciones = nMatch[1].trim();
+    }
+    
+    producto = /crédito/i.test(titulo + texto) ? "T.Crédito Lulo" : "Lulo Débito";
   }
 
-  // 4. DEFINIR COMERCIO (Si es Bre-B o lugar físico)
-  if (/bre-b/i.test(titulo + texto)) {
-    comercio = "Bre-B";
-    if (valorNum < 0) categoria = "Transferencia Enviada";
-    else categoria = "Transferencia Recibida";
-  } else if (texto.includes(" en ")) {
-    comercio = texto.split(" en ")[1].split(" por ")[0].split(".")[0].trim().toUpperCase();
-  }
-
-  // 5. PRODUCTO
-  var producto = /crédito/i.test(titulo + texto) ? "T.Credito" : "Lulo";
-
-  // 6. ESCRIBIR EN EL EXCEL
-  // Orden: Fecha | Valor | Comercio | Categoría | Producto | Observaciones
-  sheet.appendRow([
-    fecha, 
-    valorNum, 
-    comercio, 
-    categoria, 
-    producto, 
-    observaciones
-  ]);
-
+  // 3. ESCRIBIR EN EL EXCEL ---
+  sheet.appendRow([fecha, valorNum, comercio, categoria, producto, observaciones]);
   return ContentService.createTextOutput("OK");
 }
