@@ -1,5 +1,5 @@
 function doPost(e) {
-  var idArchivo = "1LyuDdPbMk5irN5LexWJUFyz_s1iTCnqCv2UUbfzbHPI"; // REEMPLAZA CON TU ID
+  var idArchivo = "SHEETS-ID"; // REEMPLAZA CON TU ID
   var ss = SpreadsheetApp.openById(idArchivo);
   var sheet = ss.getSheets()[0];
   
