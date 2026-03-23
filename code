@@ -6,36 +6,41 @@ function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   var texto = data.texto || "";
   var titulo = data.banco || ""; 
+  var notaUsuario = data.nota || ""; 
   var fecha = new Date();
 
   // --- 0. FILTROS DE SEGURIDAD ---
+  // Si se rechaza la transaccion
   if (/rechaz|negad|fallid/i.test(titulo + texto)) return ContentService.createTextOutput("Ignorada");
-  var esPublicidad = /crédito por hasta|desembólsalo|aprovecha|pide tu|cashback|rentar|seguridad temporal|código|tasa desde|invertir|dólares digitales|descuento/i.test(texto);
+  
+  var esPublicidad = /crédito por hasta|desembólsalo|aprovecha|pide tu|cashback|rentar|seguridad temporal|código|tasa desde|invertir|dólares digitales|descuento|El dólar sigue|millonario|seguro|invita/i.test(texto + titulo);
+  
   if (esPublicidad) return ContentService.createTextOutput("Publicidad Ignorada");
 
   var valorNum = 0;
   var comercio = "";
-  var categoria = "Otros";
   var producto = "";
 
   // --- 1. PARA SMS BANCOLOMBIA (CREDITO)
-  if (texto.includes("Bancolombia:")) {
+  if (texto.includes("Bancolombia") || titulo.includes("Bancolombia")) {
     var montoMatch = texto.match(/COP\s?([0-9.,]+)/);
     if (!montoMatch) return ContentService.createTextOutput("Sin monto");
     valorNum = parseFloat(montoMatch[1].replace(/\./g, "").replace(/,/g, ".")) * -1;
 
     if (texto.includes(" en ") && texto.includes(" con ")) {
       comercio = texto.split(" en ")[1].split(" con ")[0].trim();
+    } else {
+      comercio = "Transacción Bancolombia";
     }
     
-    categoria = "Gastos";
     producto = "T.Crédito Bancolombia";
   } 
 
-  // --- 2. PARA NOTIFICACIONES LULO (TRANSFERENCIAS)
+  // --- 2. PARA NOTIFICACIONES LULO
   else {
     var montoMatch = texto.match(/\$\s?([0-9.,]+)/);
     if (!montoMatch) return ContentService.createTextOutput("Sin monto");
+    
     valorNum = parseFloat(montoMatch[1].replace(/\./g, "").replace(/,/g, ""));
 
     var esEgreso = /envío|pagaste|compra|pago|PSE/i.test(titulo + texto);
@@ -48,27 +53,28 @@ function doPost(e) {
     // A. Caso PSE
     if (esPSE && texto.includes(" - ")) {
       comercio = texto.split(" - ")[1].replace(/\.$/, "").trim();
-      categoria = "Gastos";
       producto = "Pago PSE";
     } 
-    // B. Caso Transferencias (Bre-B o normales)
+    // B. Caso Transferencias
     else if (esBreB || esIngreso || /envío/i.test(texto)) {
       var nMatch = texto.match(/(?:\s(?:a|de)\s)([^.$]+)/i);
       comercio = nMatch ? nMatch[1].split("Y lo mejor")[0].trim() : "Transferencia";
-      categoria = valorNum < 0 ? "Transferencia Enviada" : "Transferencia Recibida";
       producto = "Lulo Débito";
     } 
     // C. Caso Compras Estándar
     else if (texto.includes(" por ")) {
       comercio = texto.split(" por ")[0].trim();
-      categoria = "Gastos";
       producto = /crédito/i.test(titulo + texto) ? "T.Crédito Lulo" : "Lulo Débito";
+    }
+    else {
+        comercio = "Comercio Desconocido";
+        producto = "Lulo/Otros";
     }
   }
 
   // --- 3. ESCRIBIR EN SHEETS
-  // Orden: Fecha | Valor | Comercio | Categoría | Producto
-  sheet.appendRow([fecha, valorNum, comercio, categoria, producto]);
+  // Orden: Fecha | Valor | Comercio | Producto (Cuenta) | Nota
+  sheet.appendRow([fecha, valorNum, comercio, producto, notaUsuario]);
 
   return ContentService.createTextOutput("OK");
 }
