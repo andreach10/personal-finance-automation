@@ -1,11 +1,10 @@
 function doPost(e) {
   var idArchivo = "SHEETS-ID";
   var ss = SpreadsheetApp.openById(idArchivo);
-  var sheet = ss.getSheets()[0];
   
   var data = JSON.parse(e.postData.contents);
   var texto = data.texto || "";
-  var titulo = data.banco || ""; 
+  var titulo = data.banco || "";
   var notaUsuario = data.nota || ""; 
   var fecha = new Date();
 
@@ -19,12 +18,14 @@ function doPost(e) {
 
   var valorNum = 0;
   var comercio = "";
-  var producto = "";
+  var producto = ""; 
+  var nombrePestana = ""; // Elegir la hoja destino
 
-  // --- 1. PARA SMS BANCOLOMBIA (CREDITO)
+  // --- 1. PARA SMS BANCOLOMBIA
   if (texto.includes("Bancolombia") || titulo.includes("Bancolombia")) {
     var montoMatch = texto.match(/COP\s?([0-9.,]+)/);
     if (!montoMatch) return ContentService.createTextOutput("Sin monto");
+    
     valorNum = parseFloat(montoMatch[1].replace(/\./g, "").replace(/,/g, ".")) * -1;
 
     if (texto.includes(" en ") && texto.includes(" con ")) {
@@ -34,6 +35,7 @@ function doPost(e) {
     }
     
     producto = "T.Credito Bancolombia";
+    nombrePestana = "Bancolombia"; // Pestaña Bancolombia
   } 
 
   // --- 2. PARA NOTIFICACIONES LULO
@@ -70,14 +72,21 @@ function doPost(e) {
         comercio = "Comercio Desconocido";
         producto = "Lulo/Otros";
     }
+    
+    nombrePestana = "Lulo"; // Pestaña Lulo
   }
 
-// --- 3. CLASIFICACIÓN CON GEMINI Y ESCRIBIR EN EL SHEETS ---
+  // --- 3. CLASIFICACIÓN CON GEMINI Y ESCRIBIR EN EL SHEETS ---
   
-  var categoriaAsignada = clasificarConGemini(comercio, notaUsuario);
+  var categoriaAsignada = obtenerCategoriaFinal(comercio, notaUsuario, valorNum);
+
+  // Hoja correspondiente
+  var sheet = ss.getSheetByName(nombrePestana);
+  if (!sheet) {
+    sheet = ss.getSheets()[0];
+  }
 
   // Escribimos UNA SOLA VEZ en el Excel (6 columnas)
-  // Orden final: Fecha | Valor | Comercio | Producto (Cuenta) | Nota | Categoría IA
   sheet.appendRow([fecha, valorNum, comercio, producto, notaUsuario, categoriaAsignada]);
 
   return ContentService.createTextOutput("OK");
@@ -90,7 +99,7 @@ function obtenerCategoriaFinal(comercio, nota, valorNum) {
   
   // Se puede agregar reglas si sabes que el nombre del comercio o la nota dice algo especifico
   // if (textoAAnalizar.includes("EMCALI")) return "Emcali";
-
+  
   // --- SI NO HAY REGLA, USA LA IA ---
   return clasificarConGemini(comercio, nota);
 }
@@ -99,7 +108,6 @@ function clasificarConGemini(comercio, nota) {
   var apiKey = "API-KEY";
   var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
 
-  // Estructura de las categorias que quiero
   var estructuraCategorias = `
   - Food & Drinks: Cafetería / snack, Restaurante, Groceries
   - Shopping: Tienda TQ, Regalos, Electronica, Tequi, Arena, Alimento, Vacunas, Casa, Ropa y accesorios
@@ -111,7 +119,6 @@ function clasificarConGemini(comercio, nota) {
   - Income: Gifts, Refunds (tax, purchase), Dues & grants, Interests, dividends, Wage, invoices
   `;
 
-  // Instrucción estricta para Gemini
   var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA de las subcategorías de la lista provista.\n\n" +
                "ESTRUCTURA DE CATEGORÍAS:\n" + estructuraCategorias + "\n\n" +
                "DATOS DE LA TRANSACCIÓN:\n" +
@@ -121,12 +128,12 @@ function clasificarConGemini(comercio, nota) {
                "1. Analiza el comercio y la nota para deducir el gasto (ej. si dice 'Tequi' o 'Arena', es la subcategoría 'Arena' o 'Tequi').\n" +
                "2. Responde ÚNICAMENTE con el nombre exacto de la subcategoría elegida.\n" +
                "3. No incluyas la categoría principal, no uses comillas, ni puntos, ni des explicaciones.\n" +
-               "4. Si es completamente imposible clasificarlo, responde: Desconocido.";
+               "4. Si es completamente imposible clasificarlo, responde: Compras.";
 
   var payload = {
     "contents": [{"parts": [{"text": prompt}]}],
     "generationConfig": {
-      "temperature": 0.1 // Temperatura baja para que sea muy preciso y no invente
+      "temperature": 0.1 
     }
   };
 
@@ -139,8 +146,7 @@ function clasificarConGemini(comercio, nota) {
   try {
     var response = UrlFetchApp.fetch(url, options);
     var json = JSON.parse(response.getContentText());
-    var categoriaFinal = json.candidates[0].content.parts[0].text.trim();
-    return categoriaFinal;
+    return json.candidates[0].content.parts[0].text.trim();
   } catch (e) {
     Logger.log("EL ERROR REAL ES: " + e.toString());
     return "Desconocido";
