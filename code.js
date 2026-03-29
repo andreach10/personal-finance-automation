@@ -148,7 +148,8 @@ function clasificarConGemini(comercio, nota) {
     var json = JSON.parse(response.getContentText());
     return json.candidates[0].content.parts[0].text.trim();
   } catch (e) {
-    Logger.log("EL ERROR REAL ES: " + e.toString());
+      Logger.log("EL ERROR REAL ES: " + e.toString());
+      Logger.log("Comercio: " + comercio + " | Nota: " + nota);
     return "Desconocido";
   }
 }
@@ -156,4 +157,23 @@ function clasificarConGemini(comercio, nota) {
 function pruebaRapida() {
   var resultado = clasificarConGemini("Crepes and Waffles", "Almuerzo de domingo");
   Logger.log("La IA respondió: " + resultado);
+}
+
+function simularNotificacion() {
+  var url = "URL_DEL_WEB_APP";
+
+  var payload = {
+    "texto": "Compra por $25.000 en Crepes and Waffles",
+    "banco": "Lulo",
+    "nota": ""
+  };
+
+  var options = {
+    "method": "post",
+    "contentType": "application/json",
+    "payload": JSON.stringify(payload)
+  };
+
+  var response = UrlFetchApp.fetch(url, options);
+  Logger.log("Respuesta: " + response.getContentText());
 }
