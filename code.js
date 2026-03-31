@@ -9,6 +9,9 @@ function doPost(e) {
   var notaUsuario = data.nota || ""; 
   var fecha = new Date();
 
+  var lock = LockService.getScriptLock();     
+  lock.waitLock(30000);
+
   // --- 0. FILTROS DE SEGURIDAD ---
   if (/rechaz|negad|fallid/i.test(titulo + texto)) return ContentService.createTextOutput("Rechazado");
   
@@ -89,6 +92,7 @@ function doPost(e) {
   // Agrego categoria y subcategoria
   sheet.appendRow([fecha, valorNum, comercio, producto, notaUsuario, categoriaAsignada.categoria, categoriaAsignada.subcategoria]);
 
+  lock.releaseLock(); 
   return ContentService.createTextOutput("OK");
 }
 
@@ -174,20 +178,12 @@ function simularNotificacion() {
   var url = "URL_DEL_WEB_APP";
 
   var payload = {
-    "texto": "Recibiste de ANDREA $12.000",
-    "banco": "Lulo",
-    "nota": "ropa"
+    "texto": "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito • 7068",
+    "banco": "Compra realizada",
+    "nota": " "
   };
 
   var options = {
-    "method": "post",
-    "contentType": "application/json",
-    "payload": JSON.stringify(payload)
-  };
-
-  var response = UrlFetchApp.fetch(url, options);
-  Logger.log("Respuesta: " + response.getContentText());
-}
     "method": "post",
     "contentType": "application/json",
     "payload": JSON.stringify(payload)
