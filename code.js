@@ -1,6 +1,7 @@
 function doPost(e) {
   var idArchivo = "SHEETS-ID";
   var ss = SpreadsheetApp.openById(idArchivo);
+  Logger.log("TEXTO RECIBIDO: " + texto);
   
   var data = JSON.parse(e.postData.contents);
   var texto = data.texto || "";
@@ -9,8 +10,7 @@ function doPost(e) {
   var fecha = new Date();
 
   // --- 0. FILTROS DE SEGURIDAD ---
-  // Si se rechaza la transaccion
-  if (/rechaz|negad|fallid/i.test(titulo + texto)) return ContentService.createTextOutput("Ignorada");
+  if (/rechaz|negad|fallid/i.test(titulo + texto)) return ContentService.createTextOutput("Rechazado");
   
   var esPublicidad = /crédito por hasta|desembólsalo|aprovecha|pide tu|cashback|rentar|seguridad temporal|código|tasa desde|invertir|dólares digitales|descuento|El dólar sigue|millonario|seguro|invita/i.test(texto + titulo);
   
@@ -62,11 +62,11 @@ function doPost(e) {
       var nMatch = texto.match(/(?:\s(?:a|de)\s)([^.$]+)/i);
       comercio = nMatch ? nMatch[1].split("Y lo mejor")[0].trim() : "Transferencia";
       producto = "Lulo Debito";
-    } 
-    // C. Caso Compras Estandar
-    else if (texto.includes(" por ")) {
+    }
+    // D. Caso Compras con Tarjeta de Crédito (notificación Lulo)
+    else if (texto.includes(" en ") && texto.includes(" con tu tarjeta")) {
       comercio = texto.split(" en ")[1].split(" con ")[0].trim();
-      producto = /\*'DIGITOS-FINALES-TARJETA'/i.test(texto) ? "T.Credito Lulo" : "Lulo Debito";
+      producto = /'DIGITOS-FINALES-TARJETA'/i.test(texto) ? "T.Credito Lulo" : "T.Debito Lulo";
     }
     else {
         comercio = "Comercio Desconocido";
@@ -110,10 +110,10 @@ function clasificarConGemini(comercio, nota) {
 
   var estructuraCategorias = `
   - Comida: Antojo, Cafe, Restaurante, Mercado
-  - Tienda TQ: Tienda TQ
+  - Tienda TQ: Tienda TQ, TQ
   - Compras: Regalos, Electronica, Ropa y accesorios, Deporte
   - Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena
-  - Casa: Arriendo, Administración, Mantenimiento, Arreglo
+  - Casa: Renta, Administración, Mantenimiento, Arreglo
   - Servicios: Internet, Emcali, Aseo, Gas
   - Transporte: Taxi, Uber, Transporte publico
   - Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina
@@ -124,9 +124,9 @@ function clasificarConGemini(comercio, nota) {
   - Hobbies: Salsa, Plantas, Ceramica 
   - Eventos: Cumpleaños, Matrimonio, Grados
   - Belleza: Uñas, Peluquería
-  - Salud, Medico, medicamento, examenes
+  - Salud, Medico, Medicamento, Examenes
   - Inversiones: Ale, Ahorro, Skandia
-  - Ingreso: Salario, ventas
+  - Ingreso: Salario, Arriendo
   `;
 
   var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
@@ -140,9 +140,8 @@ function clasificarConGemini(comercio, nota) {
                "3. Incluye la categoría principal, no uses comillas, ni puntos, ni des explicaciones.\n" +
                "4. Si es completamente imposible clasificarlo, responde: Compras | Compras.";
 
-  var payload = {
+var payload = {
     "contents": [{"parts": [{"text": prompt}]}],
-    "tools": [{"google_search": {}}],
     "generationConfig": {
       "temperature": 0.1
     }
