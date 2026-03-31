@@ -65,8 +65,8 @@ function doPost(e) {
     } 
     // C. Caso Compras Estandar
     else if (texto.includes(" por ")) {
-      comercio = texto.split(" por ")[0].trim();
-      producto = /crédito/i.test(titulo + texto) ? "T.Credito Lulo" : "Lulo Debito";
+      comercio = texto.split(" en ")[1].split(" con ")[0].trim();
+      producto = /\*'DIGITOS-FINALES-TARJETA'/i.test(texto) ? "T.Credito Lulo" : "Lulo Debito";
     }
     else {
         comercio = "Comercio Desconocido";
@@ -86,8 +86,8 @@ function doPost(e) {
     sheet = ss.getSheets()[0];
   }
 
-  // Escribimos UNA SOLA VEZ en el Excel (6 columnas)
-  sheet.appendRow([fecha, valorNum, comercio, producto, notaUsuario, categoriaAsignada]);
+  // Agrego categoria y subcategoria
+  sheet.appendRow([fecha, valorNum, comercio, producto, notaUsuario, categoriaAsignada.categoria, categoriaAsignada.subcategoria]);
 
   return ContentService.createTextOutput("OK");
 }
@@ -109,31 +109,42 @@ function clasificarConGemini(comercio, nota) {
   var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
 
   var estructuraCategorias = `
-  - Food & Drinks: Cafetería / snack, Restaurante, Groceries
-  - Shopping: Tienda TQ, Regalos, Electronica, Tequi, Arena, Alimento, Vacunas, Casa, Ropa y accesorios
-  - Housing: Maintenance, repairs, Servicios, Admón, Internet, Emcali, Aseo, Gas
-  - Transportation: Business trips, Long distance, Taxi, Public transport
-  - Vehicle: Vehicle insurance, Tecnomecánica, Vehicle maintenance, Parking, Fuel
-  - Life & Entertainment: Alcohol, tobacco, Donacion, Vacaciones, Viaje, Hotel, Suscripciones, Educación, Hobbies, Twerk, Salsa, Plantas, Life events, Cumpleaños, Matrimonio, Grados, Active sport, fitness, Wellness, beauty, Uñas, Peluquería, Salud, Medico
-  - Investments: Ale, Savings, Financial investments
-  - Income: Gifts, Refunds (tax, purchase), Dues & grants, Interests, dividends, Wage, invoices
+  - Comida: Antojo, Cafe, Restaurante, Mercado
+  - Tienda TQ: Tienda TQ
+  - Compras: Regalos, Electronica, Ropa y accesorios, Deporte
+  - Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena
+  - Casa: Arriendo, Administración, Mantenimiento, Arreglo
+  - Servicios: Internet, Emcali, Aseo, Gas
+  - Transporte: Taxi, Uber, Transporte publico
+  - Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina
+  - Entretenimiento: Alcohol, Salida, Concierto, Evento
+  - Viaje: Tiquete, Hotel, Airbnb, Hostal
+  - Suscripciones: Crunchyroll, Youtube, Google
+  - Educación
+  - Hobbies: Salsa, Plantas, Ceramica 
+  - Eventos: Cumpleaños, Matrimonio, Grados
+  - Belleza: Uñas, Peluquería
+  - Salud, Medico, medicamento, examenes
+  - Inversiones: Ale, Ahorro, Skandia
+  - Ingreso: Salario, ventas
   `;
 
-  var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA de las subcategorías de la lista provista.\n\n" +
+  var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
                "ESTRUCTURA DE CATEGORÍAS:\n" + estructuraCategorias + "\n\n" +
                "DATOS DE LA TRANSACCIÓN:\n" +
                "Comercio/Entidad: '" + comercio + "'\n" +
                "Nota del usuario: '" + nota + "'\n\n" +
                "REGLAS:\n" +
-               "1. Analiza el comercio y la nota para deducir el gasto (ej. si dice 'Tequi' o 'Arena', es la subcategoría 'Arena' o 'Tequi').\n" +
-               "2. Responde ÚNICAMENTE con el nombre exacto de la subcategoría elegida.\n" +
-               "3. No incluyas la categoría principal, no uses comillas, ni puntos, ni des explicaciones.\n" +
-               "4. Si es completamente imposible clasificarlo, responde: Compras.";
+               "1. Analiza el comercio y la nota para deducir el gasto. Si no reconoces el comercio, búscalo para entender qué vende.\n" +
+               "2. Responde con los nombres de la categoría y subcategoría elegida en formato 'Categoria | Subcategoria'.\n" +
+               "3. Incluye la categoría principal, no uses comillas, ni puntos, ni des explicaciones.\n" +
+               "4. Si es completamente imposible clasificarlo, responde: Compras | Compras.";
 
   var payload = {
     "contents": [{"parts": [{"text": prompt}]}],
+    "tools": [{"google_search": {}}],
     "generationConfig": {
-      "temperature": 0.1 
+      "temperature": 0.1
     }
   };
 
@@ -146,29 +157,38 @@ function clasificarConGemini(comercio, nota) {
   try {
     var response = UrlFetchApp.fetch(url, options);
     var json = JSON.parse(response.getContentText());
-    return json.candidates[0].content.parts[0].text.trim();
+    var respuesta = json.candidates[0].content.parts[0].text.trim();
+    var partes = respuesta.split(" | ");
+    return {
+      categoria: partes[0] ? partes[0].trim() : "Compras",
+      subcategoria: partes[1] ? partes[1].trim() : "Compras"
+    };
   } catch (e) {
-      Logger.log("EL ERROR REAL ES: " + e.toString());
-      Logger.log("Comercio: " + comercio + " | Nota: " + nota);
-    return "Desconocido";
+    Logger.log("EL ERROR REAL ES: " + e.toString());
+    Logger.log("Comercio: " + comercio + " | Nota: " + nota);
+    return { categoria: "Compras", subcategoria: "Compras" };
   }
 }
 
-function pruebaRapida() {
-  var resultado = clasificarConGemini("Crepes and Waffles", "Almuerzo de domingo");
-  Logger.log("La IA respondió: " + resultado);
-}
 
 function simularNotificacion() {
   var url = "URL_DEL_WEB_APP";
 
   var payload = {
-    "texto": "Compra por $25.000 en Crepes and Waffles",
+    "texto": "Recibiste de ANDREA $12.000",
     "banco": "Lulo",
-    "nota": ""
+    "nota": "ropa"
   };
 
   var options = {
+    "method": "post",
+    "contentType": "application/json",
+    "payload": JSON.stringify(payload)
+  };
+
+  var response = UrlFetchApp.fetch(url, options);
+  Logger.log("Respuesta: " + response.getContentText());
+}
     "method": "post",
     "contentType": "application/json",
     "payload": JSON.stringify(payload)
