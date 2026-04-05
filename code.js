@@ -1,5 +1,6 @@
 function doPost(e) {
-  var idArchivo = "SHEETS-ID";
+
+  var idArchivo = PropertiesService.getScriptProperties().getProperty("idArchivo")
   var ss = SpreadsheetApp.openById(idArchivo);
   Logger.log("TEXTO RECIBIDO: " + texto);
   
@@ -68,8 +69,9 @@ function doPost(e) {
     }
     // D. Caso Compras con Tarjeta de Crédito (notificación Lulo)
     else if (texto.includes(" en ") && texto.includes(" con tu tarjeta")) {
+      var NumeroTarjeta = PropertiesService.getScriptProperties().getProperty("NumeroTarjeta")
       comercio = texto.split(" en ")[1].split(" con ")[0].trim();
-      producto = /'DIGITOS-FINALES-TARJETA'/i.test(texto) ? "T.Credito Lulo" : "T.Debito Lulo";
+      producto = RegExp(NumeroTarjeta, "i").test(texto) ? "T.Credito Lulo" : "T.Debito Lulo";
     }
     else {
         comercio = "Comercio Desconocido";
@@ -99,17 +101,25 @@ function doPost(e) {
 function obtenerCategoriaFinal(comercio, nota, valorNum) {
   var textoAAnalizar = (comercio + " " + nota).toUpperCase();
 
-  // --- REGLAS FIJAS ---
-  
-  // Se puede agregar reglas si sabes que el nombre del comercio o la nota dice algo especifico
-  // if (textoAAnalizar.includes("EMCALI")) return "Emcali";
+  // --- ZONA DE REGLAS FIJAS ---
+  if (textoAAnalizar.includes("TECNOQUIMICAS") || textoAAnalizar.includes("TQ")) {
+    if (valorNum > 0) {
+      return {categoria: "Ingreso", subcategoria: "Salario"}
+    } else {
+      return {categoria: "Tienda TQ", subcategoria: "Tienda TQ"};
+    }
+  }
+
+  if (textoAAnalizar.includes("ASEO")) return {categoria: "Servicios", subcategoria: "Aseo"};
+  if (textoAAnalizar.includes("AVVILLAS")) return {categoria: "Casa", subcategoria: "Administración"};
+  if (textoAAnalizar.includes("EDS")) return {categoria: "Carro", subcategoria: "Gasolina"};
   
   // --- SI NO HAY REGLA, USA LA IA ---
   return clasificarConGemini(comercio, nota);
 }
 
 function clasificarConGemini(comercio, nota) {
-  var apiKey = "API-KEY";
+  var apiKey = PropertiesService.getScriptProperties().getProperty("ApiKey")
   var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
 
   var estructuraCategorias = `
@@ -117,7 +127,7 @@ function clasificarConGemini(comercio, nota) {
   - Tienda TQ: Tienda TQ, TQ
   - Compras: Regalos, Electronica, Ropa y accesorios, Deporte
   - Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena
-  - Casa: Renta, Administración, Mantenimiento, Arreglo
+  - Casa: Arriendo, Administración, Mantenimiento, Arreglo
   - Servicios: Internet, Emcali, Aseo, Gas
   - Transporte: Taxi, Uber, Transporte publico
   - Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina
@@ -175,10 +185,10 @@ var payload = {
 
 
 function simularNotificacion() {
-  var url = "URL_DEL_WEB_APP";
+  var url = PropertiesService.getScriptProperties().getProperty("url")
 
   var payload = {
-    "texto": "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito • 7068",
+    "texto": "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito",
     "banco": "Compra realizada",
     "nota": " "
   };
