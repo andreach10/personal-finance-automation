@@ -102,17 +102,9 @@ function obtenerCategoriaFinal(comercio, nota, valorNum) {
   var textoAAnalizar = (comercio + " " + nota).toUpperCase();
 
   // --- ZONA DE REGLAS FIJAS ---
-  if (textoAAnalizar.includes("TECNOQUIMICAS") || textoAAnalizar.includes("TQ")) {
-    if (valorNum > 0) {
-      return {categoria: "Ingreso", subcategoria: "Salario"}
-    } else {
-      return {categoria: "Tienda TQ", subcategoria: "Tienda TQ"};
-    }
-  }
+  // Se pueden agregar reglas fijas como
 
-  if (textoAAnalizar.includes("ASEO")) return {categoria: "Servicios", subcategoria: "Aseo"};
-  if (textoAAnalizar.includes("AVVILLAS")) return {categoria: "Casa", subcategoria: "Administración"};
-  if (textoAAnalizar.includes("EDS")) return {categoria: "Carro", subcategoria: "Gasolina"};
+  // if (textoAAnalizar.includes("ASEO")) return {categoria: "Servicios", subcategoria: "Aseo"};
   
   // --- SI NO HAY REGLA, USA LA IA ---
   return clasificarConGemini(comercio, nota);
