@@ -87,7 +87,6 @@ style SG4 fill:#fff8e1,stroke:#f9a825,stroke-width:2px,stroke-dasharray: 3 3,col
 personal-finance-automation/
 │
 ├── 1.sheets-pipeline/
-│   ├── macrodroid_macro             # Contains the macro structure
 │   ├── categorize_transaction.gs    # Calls the Gemini API and writes to Sheets
 │   └── categorize_historical.gs     # Processes historical rows in batches using triggers
 │
@@ -150,10 +149,10 @@ personal-finance-automation/
 ### Installation
 
 1. Create a google sheets file and name it however you want.
-2. Create a new deployment at AppScript in google sheets.
+2. Create a new [deployment at AppScript in google sheets](https://developers.google.com/apps-script/concepts/deployments).
 3. Copy the categorize_transaction.gs file in the extension into the deployment.
-4. Download Macrodroid and install this macro.
-5. Link the application web url to Macrodroid at the HTTP request in the actions block.
+4. Download Macrodroid and install [this macro.](https://www.macrodroidlink.com/macrostore?id=30073)
+5. Edit the `YOUR_APPS_SCRIPT_DEPLOYMENT_URL` in Macrodroid at the HTTP request in the actions block with AppScript's application web url.
 6. Configure the script properties as:
    1. 'ApiKey' = Get an API key obtained at Google AI Studio.
    2. 'url' = The value is the application web url at AppScripts manage deployments.
