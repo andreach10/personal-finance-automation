@@ -5,8 +5,8 @@ library(janitor)
 library(tidyverse)
 
 # Importo los datos con el API de Tidyverse
-Bancolombia <- read_sheet('1LyuDdPbMk5irN5LexWJUFyz_s1iTCnqCv2UUbfzbHPI', sheet = 'Bancolombia')
-Lulo <- read_sheet('1LyuDdPbMk5irN5LexWJUFyz_s1iTCnqCv2UUbfzbHPI', sheet = 'Lulo')
+Bancolombia <- read_sheet(Sys.getenv("SHEETS_ID"), sheet = 'Bancolombia')
+Lulo <- read_sheet(Sys.getenv("SHEETS_ID"), sheet = 'Lulo')
 
 # Verifico que tengo las mismas columnas
 compare_df_cols(Bancolombia, Lulo)
