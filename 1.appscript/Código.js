@@ -23,7 +23,7 @@ function doPost(e) {
   var valorNum = 0, comercio = "", producto = "", pestana = "";
 
   // --- 1. BANCOLOMBIA ---
-  if (/bancolombia/i.test(texto + titulo)) {
+  if (/bancolombia/i.test(titulo)) {
 
     // A. Pago recibido en tarjeta (Wompi-PSE, etc.)
     if (/recibimos pago por/i.test(texto)) {
@@ -160,7 +160,7 @@ function clasificarConGemini(comercio, nota) {
     "- Tarjeta de credito: TC Bancolombia, TC Lulo";
 
   var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
-      "ESTRUCTURA DE CATEGORÍAS (Formato: Categoría: Subcategoría1, Subcategoría2):\n" + estructuraCategorias + "\n\n" +
+      "ESTRUCTURA DE CATEGORÍAS (Formato: Categoría: Subcategoría1, Subcategoría2):\n" + categorias + "\n\n" +
       "DATOS DE LA TRANSACCIÓN:\n" +
       "Comercio/Entidad: '" + comercio + "'\n" +
       "Nota del usuario: '" + (nota || "Sin nota") + "'\n\n" +
@@ -265,20 +265,20 @@ function runTests() {
   Logger.log("========== 🧪 INICIO DE TESTS ==========");
   _testParsearMonto();
   _testCategorias();
-  _testNotificaciones();
+  testDirecto();
   Logger.log("=========================================");
 }
 
 function _testParsearMonto() {
   Logger.log("\n--- parsearMonto ---");
   var casos = [
-    { input: "2,606,189.00", esperado: 2606189,  label: "Americano con decimales  " },
-    { input: "2.606.189",    esperado: 2606189,  label: "Europeo sin decimales    " },
-    { input: "50.000,90",    esperado: 50000.9,  label: "Europeo con decimales    " },
-    { input: "762,90",       esperado: 762.9,    label: "Coma decimal (2 dígitos) " },
-    { input: "762904",       esperado: 762904,   label: "Sin separadores " },
-    { input: "1.500",        esperado: 1500,     label: "Punto miles (3 dígitos)  " },
-    { input: "1.50",esperado: 1.5,      label: "Punto decimal (2 dígitos)" },
+    { input: "2,606,189.00", esperado: 2606189, label: "Americano con decimales  " },
+    { input: "2.606.189",    esperado: 2606189, label: "Europeo sin decimales    " },
+    { input: "50.000,90",    esperado: 50000.9, label: "Europeo con decimales    " },
+    { input: "762,90",       esperado: 762.9,   label: "Coma decimal (2 dígitos) " },
+    { input: "762904",       esperado: 762904,  label: "Sin separadores          " },
+    { input: "1.500",        esperado: 1500,    label: "Punto miles (3 dígitos)  " },
+    { input: "1.50",         esperado: 1.5,     label: "Punto decimal (2 dígitos)" },
   ];
   casos.forEach(function(c) {
     var resultado = parsearMonto(c.input);
@@ -291,11 +291,11 @@ function _testParsearMonto() {
 function _testCategorias() {
   Logger.log("\n--- obtenerCategoriaFinal (reglas fijas) ---");
   var casos = [
-    { comercio: "TECNOQUIMICAS SA", nota: "", valor:  5000000, cat: "Ingreso", sub: "Salario"},
-    { comercio: "Tienda TQ oficina", nota: "", valor: -50000,   cat: "Tienda TQ", sub: "Tienda TQ"},
+    { comercio: "TECNOQUIMICAS SA",         nota: "", valor:  5000000, cat: "Ingreso",           sub: "Salario"        },
+    { comercio: "Tienda TQ oficina",        nota: "", valor: -50000,   cat: "Tienda TQ",         sub: "Tienda TQ"      },
     { comercio: "Pago Tarjeta Bancolombia", nota: "", valor:  2606189, cat: "Tarjeta de credito", sub: "TC Bancolombia" },
-    { comercio: "EDS La 14", nota: "", valor: -80000,   cat: "Carro", sub: "Gasolina"},
-    { comercio: "Conjunto AVVILLAS",nota: "", valor: -300000,  cat: "Casa", sub: "Administración" },
+    { comercio: "EDS La 14",               nota: "", valor: -80000,   cat: "Carro",             sub: "Gasolina"       },
+    { comercio: "Conjunto AVVILLAS",        nota: "", valor: -300000,  cat: "Casa",              sub: "Administración" },
   ];
   casos.forEach(function(c) {
     var res = obtenerCategoriaFinal(c.comercio, c.nota, c.valor);
@@ -305,33 +305,25 @@ function _testCategorias() {
   });
 }
 
-function _testNotificaciones() {
+function testDirecto() {
   Logger.log("\n--- Simulación de notificaciones ---");
-  var url = PropertiesService.getScriptProperties().getProperty("url");
   var casos = [
-    { label: "Lulo - Compra TC", texto: "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito", banco: "Compra realizada",nota: "" },
-    { label: "Lulo - PSE a Bancolombia",  texto: "$2.606.189 - Bancolombia Sa.", banco: "Tu pago PSE fue exitoso", nota: "" },
-    { label: "Lulo - Transferencia", texto: "Enviaste $150.000 a Juan Perez.", banco: "Envío exitoso", nota: "" },
-    { label: "Lulo - Ingreso", texto: "Recibiste $200.000 de Maria Lopez", banco: "Llegó una transferencia", nota: "" },
-    { label: "Lulo - Devolución",texto: "Devolución de $50.000 de Rappi", banco: "Reembolso recibido", nota: "" },
-    { label: "Bancolombia - Compra COP", texto: "Bancolombia: Compra por COP 50.000 en RAPPI con Tarjeta", banco: "Bancolombia", nota: "" },
-    { label: "Bancolombia - Pago PSE", texto: "Bancolombia: Recibimos pago por $1,206,189.00 a tu tarjeta de credito desde Wompi-PSE", banco: "Bancolombia", nota: "" },
-    { label: "Filtro - Cancelar",texto: "$50.000 en Starbucks con tu tarjeta",banco: "Compra realizada",nota: "cancelar"  },
-    { label: "Filtro - Publicidad", texto: "Aprovecha tu crédito preaprobado", banco: "Lulo", nota: "" },
-    { label: "Filtro - Transacción negada", texto: "Transacción rechazada por fondos insuficientes", banco: "Lulo", nota: "" },
+    { texto: "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito", banco: "Compra realizada",         nota: ""         },
+    { texto: "$2.606.189 - Bancolombia Sa.",                                  banco: "Tu pago PSE fue exitoso",  nota: ""         },
+    { texto: "Enviaste $150.000 a Juan Perez. Y lo mejor...",                 banco: "Envío exitoso",            nota: ""         },
+    { texto: "Recibiste $200.000 de Maria Lopez",                             banco: "Llegó una transferencia",  nota: ""         },
+    { texto: "Devolución de $50.000 de Rappi",                                banco: "Reembolso recibido",       nota: ""         },
+    { texto: "Bancolombia: Compra por COP 50.000 en RAPPI con Tarjeta",       banco: "Bancolombia",              nota: ""         },
+    { texto: "Bancolombia: Recibimos pago por $2,606,189.00 a tu tarjeta de credito desde Wompi-PSE", banco: "Bancolombia", nota: "" },
+    { texto: "$50.000 en Starbucks con tu tarjeta",                           banco: "Compra realizada",         nota: "cancelar" },
+    { texto: "Aprovecha tu crédito preaprobado",                              banco: "Lulo",                     nota: ""         },
+    { texto: "Transacción rechazada por fondos insuficientes",                banco: "Lulo",                     nota: ""         },
   ];
   casos.forEach(function(c) {
-    var options = {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify({ texto: c.texto, banco: c.banco, nota: c.nota }),
-      muteHttpExceptions: true
+    var fakeEvent = {
+      postData: { contents: JSON.stringify({ texto: c.texto, banco: c.banco, nota: c.nota }) }
     };
-    try {
-      var res = UrlFetchApp.fetch(url, options);
-      Logger.log("📨 " + c.label + " → " + res.getContentText());
-    } catch (err) {
-      Logger.log("❌ " + c.label + " → ERROR: " + err.toString());
-    }
+    var resultado = doPost(fakeEvent);
+    Logger.log("📨 [" + c.banco + "] → " + resultado.getContent());
   });
 }
