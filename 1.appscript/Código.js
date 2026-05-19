@@ -15,10 +15,10 @@ function doPost(e) {
   Logger.log("TEXTO: " + texto + " | TITULO: " + titulo);
 
   // --- 0. FILTROS ---
-  if (/cancelar/i.test(nota))                      return responder("Cancelado por usuario");
+  if (/cancelar/i.test(nota))    return responder("Cancelado por usuario");
   if (/rechaz|negad|fallid/i.test(titulo + texto)) return responder("Rechazado");
   if (/crédito por hasta|desembólsalo|aprovecha|pide tu|cashback|rentar|seguridad temporal|preaprobado|código|tasa desde|invertir|dólares digitales|descuento|El dólar sigue|millonario|seguro|invita/i
-      .test(texto + titulo))                        return responder("Publicidad Ignorada");
+      .test(texto + titulo))      return responder("Publicidad Ignorada");
 
   var valorNum = 0, comercio = "", producto = "", pestana = "";
 
@@ -120,13 +120,13 @@ function obtenerCategoriaFinal(comercio, nota, valorNum) {
   // Reglas fijas (más rápidas que Gemini)
   if (texto.includes("TECNOQUIMICAS") || texto.includes("TQ"))
     return valorNum > 0
-      ? { categoria: "Ingreso",           subcategoria: "Salario"        }
-      : { categoria: "Tienda TQ",         subcategoria: "Tienda TQ"      };
+      ? { categoria: "Ingreso",  subcategoria: "Salario"        }
+      : { categoria: "Tienda TQ",subcategoria: "Tienda TQ"      };
 
   if (texto.includes("PAGO TARJETA BANCOLOMBIA"))
     return { categoria: "Tarjeta de credito", subcategoria: "TC Bancolombia" };
 
-  if (texto.includes("ASEO"))    return { categoria: "Servicios", subcategoria: "Aseo"           };
+  if (texto.includes("ASEO"))    return { categoria: "Servicios", subcategoria: "Aseo"  };
   if (texto.includes("AVVILLAS")) return { categoria: "Casa",      subcategoria: "Administración" };
   if (texto.includes("EDS"))     return { categoria: "Carro",     subcategoria: "Gasolina"       };
 
@@ -159,16 +159,18 @@ function clasificarConGemini(comercio, nota) {
     "- Ingreso: Salario, Arriendo\n" +
     "- Tarjeta de credito: TC Bancolombia, TC Lulo";
 
-  var prompt =
-    "Clasifica este movimiento financiero en UNA subcategoría de la lista.\n\n" +
-    "CATEGORÍAS:\n" + categorias + "\n\n" +
-    "Comercio: '" + comercio + "'\n" +
-    "Nota: '" + (nota || "Sin nota") + "'\n\n" +
-    "Reglas:\n" +
-    "1. Responde SOLO en formato: Categoria | Subcategoria\n" +
-    "2. Sin puntos, explicaciones ni negritas.\n" +
-    "3. Si no identificas el comercio, búscalo en internet.\n" +
-    "4. Si aún así no puedes, responde: Compras | Compras";
+  var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
+      "ESTRUCTURA DE CATEGORÍAS (Formato: Categoría: Subcategoría1, Subcategoría2):\n" + estructuraCategorias + "\n\n" +
+      "DATOS DE LA TRANSACCIÓN:\n" +
+      "Comercio/Entidad: '" + comercio + "'\n" +
+      "Nota del usuario: '" + (nota || "Sin nota") + "'\n\n" +
+      "REGLAS:\n" +
+      "1. Analiza el comercio y la nota para deducir el gasto.\n" +
+      "2. Responde estrictamente en formato: Categoria | Subcategoria\n" +
+      "3. No uses puntos finales, ni explicaciones, ni negritas.\n" +
+      "4. Si la categoría no tiene subcategorías en la lista, usa el nombre de la categoría como subcategoría.\n" +
+      "5. Si no puedes identificarlo y no hay nota, busca el nombre del comercio en internet y agréga la categoría y subcategoría que crees que corresponda \n" +
+      "6. Si aún con la búsqueda no puedes identificarlo, responde: Compras | Compras";
 
   var options = {
     method: "post",
@@ -235,7 +237,7 @@ function parsearMonto(str) {
   if (tieneComa && tienePunto) {
     return str.lastIndexOf(",") > str.lastIndexOf(".")
       ? parseFloat(str.replace(/\./g, "").replace(",", "."))  // europeo:  1.234,56
-      : parseFloat(str.replace(/,/g, ""));                    // americano: 1,234.56
+      : parseFloat(str.replace(/,/g, ""));  // americano: 1,234.56
   }
   // Solo comas: 2 dígitos al final = decimal, sino = miles
   if (tieneComa) {
@@ -274,9 +276,9 @@ function _testParsearMonto() {
     { input: "2.606.189",    esperado: 2606189,  label: "Europeo sin decimales    " },
     { input: "50.000,90",    esperado: 50000.9,  label: "Europeo con decimales    " },
     { input: "762,90",       esperado: 762.9,    label: "Coma decimal (2 dígitos) " },
-    { input: "762904",       esperado: 762904,   label: "Sin separadores          " },
+    { input: "762904",       esperado: 762904,   label: "Sin separadores " },
     { input: "1.500",        esperado: 1500,     label: "Punto miles (3 dígitos)  " },
-    { input: "1.50",         esperado: 1.5,      label: "Punto decimal (2 dígitos)" },
+    { input: "1.50",esperado: 1.5,      label: "Punto decimal (2 dígitos)" },
   ];
   casos.forEach(function(c) {
     var resultado = parsearMonto(c.input);
@@ -289,11 +291,11 @@ function _testParsearMonto() {
 function _testCategorias() {
   Logger.log("\n--- obtenerCategoriaFinal (reglas fijas) ---");
   var casos = [
-    { comercio: "TECNOQUIMICAS SA",         nota: "", valor:  5000000, cat: "Ingreso",           sub: "Salario"        },
-    { comercio: "Tienda TQ oficina",        nota: "", valor: -50000,   cat: "Tienda TQ",         sub: "Tienda TQ"      },
+    { comercio: "TECNOQUIMICAS SA", nota: "", valor:  5000000, cat: "Ingreso", sub: "Salario"},
+    { comercio: "Tienda TQ oficina", nota: "", valor: -50000,   cat: "Tienda TQ", sub: "Tienda TQ"},
     { comercio: "Pago Tarjeta Bancolombia", nota: "", valor:  2606189, cat: "Tarjeta de credito", sub: "TC Bancolombia" },
-    { comercio: "EDS La 14",               nota: "", valor: -80000,   cat: "Carro",             sub: "Gasolina"       },
-    { comercio: "Conjunto AVVILLAS",        nota: "", valor: -300000,  cat: "Casa",              sub: "Administración" },
+    { comercio: "EDS La 14", nota: "", valor: -80000,   cat: "Carro", sub: "Gasolina"},
+    { comercio: "Conjunto AVVILLAS",nota: "", valor: -300000,  cat: "Casa", sub: "Administración" },
   ];
   casos.forEach(function(c) {
     var res = obtenerCategoriaFinal(c.comercio, c.nota, c.valor);
@@ -307,16 +309,16 @@ function _testNotificaciones() {
   Logger.log("\n--- Simulación de notificaciones ---");
   var url = PropertiesService.getScriptProperties().getProperty("url");
   var casos = [
-    { label: "Lulo - Compra TC",          texto: "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito", banco: "Compra realizada",         nota: ""          },
-    { label: "Lulo - PSE a Bancolombia",  texto: "$2.606.189 - Bancolombia Sa.",                                  banco: "Tu pago PSE fue exitoso",  nota: ""          },
-    { label: "Lulo - Transferencia",      texto: "Enviaste $150.000 a Juan Perez.",                 banco: "Envío exitoso",            nota: ""          },
-    { label: "Lulo - Ingreso",            texto: "Recibiste $200.000 de Maria Lopez",                             banco: "Llegó una transferencia",  nota: ""          },
-    { label: "Lulo - Devolución",         texto: "Devolución de $50.000 de Rappi",                                banco: "Reembolso recibido",       nota: ""          },
-    { label: "Bancolombia - Compra COP",  texto: "Bancolombia: Compra por COP 50.000 en RAPPI con Tarjeta",      banco: "Bancolombia",              nota: ""          },
-    { label: "Bancolombia - Pago PSE",    texto: "Bancolombia: Recibimos pago por $1,206,189.00 a tu tarjeta de credito desde Wompi-PSE", banco: "Bancolombia", nota: "" },
-    { label: "Filtro - Cancelar",         texto: "$50.000 en Starbucks con tu tarjeta",                           banco: "Compra realizada",         nota: "cancelar"  },
-    { label: "Filtro - Publicidad",       texto: "Aprovecha tu crédito preaprobado",                              banco: "Lulo",                     nota: ""          },
-    { label: "Filtro - Transacción negada", texto: "Transacción rechazada por fondos insuficientes",              banco: "Lulo",                     nota: ""          },
+    { label: "Lulo - Compra TC", texto: "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito", banco: "Compra realizada",nota: "" },
+    { label: "Lulo - PSE a Bancolombia",  texto: "$2.606.189 - Bancolombia Sa.", banco: "Tu pago PSE fue exitoso", nota: "" },
+    { label: "Lulo - Transferencia", texto: "Enviaste $150.000 a Juan Perez.", banco: "Envío exitoso", nota: "" },
+    { label: "Lulo - Ingreso", texto: "Recibiste $200.000 de Maria Lopez", banco: "Llegó una transferencia", nota: "" },
+    { label: "Lulo - Devolución",texto: "Devolución de $50.000 de Rappi", banco: "Reembolso recibido", nota: "" },
+    { label: "Bancolombia - Compra COP", texto: "Bancolombia: Compra por COP 50.000 en RAPPI con Tarjeta", banco: "Bancolombia", nota: "" },
+    { label: "Bancolombia - Pago PSE", texto: "Bancolombia: Recibimos pago por $1,206,189.00 a tu tarjeta de credito desde Wompi-PSE", banco: "Bancolombia", nota: "" },
+    { label: "Filtro - Cancelar",texto: "$50.000 en Starbucks con tu tarjeta",banco: "Compra realizada",nota: "cancelar"  },
+    { label: "Filtro - Publicidad", texto: "Aprovecha tu crédito preaprobado", banco: "Lulo", nota: "" },
+    { label: "Filtro - Transacción negada", texto: "Transacción rechazada por fondos insuficientes", banco: "Lulo", nota: "" },
   ];
   casos.forEach(function(c) {
     var options = {
