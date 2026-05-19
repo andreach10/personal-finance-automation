@@ -119,68 +119,91 @@ function obtenerCategoriaFinal(comercio, nota, valorNum) {
 }
 
 function clasificarConGemini(comercio, nota) {
-  var apiKey = PropertiesService.getScriptProperties().getProperty("ApiKey")
-  var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+  var apiKey = PropertiesService.getScriptProperties().getProperty("ApiKey");
+  
+  // CORRECCIÓN: Usar gemini-1.5-flash (la versión 2.5 no existe aún)
+  var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey;
 
   var estructuraCategorias = `
   - Comida: Antojo, Cafe, Restaurante, Mercado
   - Tienda TQ: Tienda TQ, TQ
-  - Compras: Regalos, Electronica, Ropa y accesorios, Deporte
+  - Compras: Regalos, Electronica, Ropa, Accesorios, Deporte
   - Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena
-  - Casa: Arriendo, Administración, Mantenimiento, Arreglo
+  - Casa: Administración, Mantenimiento, Arreglo
   - Servicios: Internet, Emcali, Aseo, Gas
   - Transporte: Taxi, Uber, Transporte publico
   - Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina
   - Entretenimiento: Alcohol, Salida, Concierto, Evento
   - Viaje: Tiquete, Hotel, Airbnb, Hostal
-  - Suscripciones: Crunchyroll, Youtube, Google
-  - Educación
-  - Hobbies: Salsa, Plantas, Ceramica 
+  - Suscripciones: Crunchyroll, Youtube, Google, Claude, Otros
+  - Educación: General
+  - Hobbies: Salsa, Plantas, Ceramica, Ejercicio, Hobbies.
   - Eventos: Cumpleaños, Matrimonio, Grados
-  - Belleza: Uñas, Peluquería
-  - Salud, Medico, Medicamento, Examenes
+  - Belleza: Uñas, Peluquería, Skincare
+  - Salud: Medico, Medicamento, Examenes
   - Inversiones: Ale, Ahorro, Skandia
   - Ingreso: Salario, Arriendo
+  - Tarjeta de credito: TC Bancolombia, TC Lulo
   `;
 
   var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
-               "ESTRUCTURA DE CATEGORÍAS:\n" + estructuraCategorias + "\n\n" +
+               "ESTRUCTURA DE CATEGORÍAS (Formato: Categoría: Subcategoría1, Subcategoría2):\n" + estructuraCategorias + "\n\n" +
                "DATOS DE LA TRANSACCIÓN:\n" +
                "Comercio/Entidad: '" + comercio + "'\n" +
-               "Nota del usuario: '" + nota + "'\n\n" +
+               "Nota del usuario: '" + (nota || "Sin nota") + "'\n\n" +
                "REGLAS:\n" +
-               "1. Analiza el comercio y la nota para deducir el gasto. Si no reconoces el comercio, búscalo para entender qué vende.\n" +
-               "2. Responde con los nombres de la categoría y subcategoría elegida en formato 'Categoria | Subcategoria'.\n" +
-               "3. Incluye la categoría principal, no uses comillas, ni puntos, ni des explicaciones.\n" +
-               "4. Si es completamente imposible clasificarlo, responde: Compras | Compras.";
+               "1. Analiza el comercio y la nota para deducir el gasto.\n" +
+               "2. Responde estrictamente en formato: Categoria | Subcategoria\n" +
+               "3. No uses puntos finales, ni explicaciones, ni negritas.\n" +
+               "4. Si la categoría no tiene subcategorías en la lista, usa el nombre de la categoría como subcategoría.\n" +
+               "5. Si no puedes identificarlo y no hay nota, busca el nombre del comercio en internet y agréga la categoría y subcategoría que crees que corresponda \n" +
+               "6. Si aún con la búsqueda no puedes identificarlo, responde: Compras | Compras";
 
-var payload = {
+  var payload = {
     "contents": [{"parts": [{"text": prompt}]}],
     "generationConfig": {
-      "temperature": 0.1
+      "temperature": 0.1 // Temperatura baja para respuestas consistentes
     }
   };
 
   var options = {
     "method": "post",
     "contentType": "application/json",
-    "payload": JSON.stringify(payload)
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true // Para ver el error real si la API falla
   };
 
   try {
     var response = UrlFetchApp.fetch(url, options);
+    var responseCode = response.getResponseCode();
     var json = JSON.parse(response.getContentText());
+
+    if (responseCode !== 200) {
+      Logger.log("Error de API (" + responseCode + "): " + JSON.stringify(json));
+      return { categoria: "Error", subcategoria: "API" };
+    }
+
     var respuesta = json.candidates[0].content.parts[0].text.trim();
-    var partes = respuesta.split(" | ");
+    
+    // Limpiar respuesta de posibles caracteres extraños o saltos de línea
+    respuesta = respuesta.replace(/\n/g, "");
+
+    var partes = respuesta.split("|");
+    
     return {
       categoria: partes[0] ? partes[0].trim() : "Compras",
       subcategoria: partes[1] ? partes[1].trim() : "Compras"
     };
+
   } catch (e) {
-    Logger.log("EL ERROR REAL ES: " + e.toString());
-    Logger.log("Comercio: " + comercio + " | Nota: " + nota);
+    Logger.log("ERROR CRÍTICO: " + e.toString());
     return { categoria: "Compras", subcategoria: "Compras" };
   }
+}
+
+function testGemini() {
+  var resultado = clasificarConGemini("Uber *Trip", "Viaje a la oficina");
+  Logger.log(resultado); // Debería imprimir: {categoria: "Transporte", subcategoria: "Uber"}
 }
 
 
