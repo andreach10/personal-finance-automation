@@ -1,327 +1,335 @@
+// ================================================
+// MAIN: Recibe notificación y registra en Sheets
+// ================================================
 function doPost(e) {
+  var ss = SpreadsheetApp.openById(
+    PropertiesService.getScriptProperties().getProperty("idArchivo")
+  );
 
-  var idArchivo = PropertiesService.getScriptProperties().getProperty("idArchivo")
-  var ss = SpreadsheetApp.openById(idArchivo);
-  
-  var data = JSON.parse(e.postData.contents);
-  var texto = data.texto || "";
-  var titulo = data.banco || "";
-  var notaUsuario = data.nota || ""; 
-  var fecha = new Date();
+  var data   = JSON.parse(e.postData.contents);
+  var texto  = data.texto || "";
+  var titulo = data.banco  || "";
+  var nota   = data.nota   || "";
+  var fecha  = new Date();
 
-  Logger.log("TEXTO RECIBIDO: " + texto);
+  Logger.log("TEXTO: " + texto + " | TITULO: " + titulo);
 
-  var lock = LockService.getScriptLock();     
-  lock.waitLock(30000);
+  // --- 0. FILTROS ---
+  if (/cancelar/i.test(nota))                      return responder("Cancelado por usuario");
+  if (/rechaz|negad|fallid/i.test(titulo + texto)) return responder("Rechazado");
+  if (/crédito por hasta|desembólsalo|aprovecha|pide tu|cashback|rentar|seguridad temporal|preaprobado|código|tasa desde|invertir|dólares digitales|descuento|El dólar sigue|millonario|seguro|invita/i
+      .test(texto + titulo))                        return responder("Publicidad Ignorada");
 
-  // --- 0. FILTROS DE SEGURIDAD ---
-  if (/cancelar/i.test(notaUsuario)) return ContentService.createTextOutput("Cancelado por usuario");
-  if (/rechaz|negad|fallid/i.test(titulo + texto)) return ContentService.createTextOutput("Rechazado");
-  
-  var esPublicidad = /crédito por hasta|desembólsalo|aprovecha|pide tu|cashback|rentar|seguridad temporal|preaprobado|código|tasa desde|invertir|dólares digitales|descuento|El dólar sigue|millonario|seguro|invita/i.test(texto + titulo);
-  
-  if (esPublicidad) return ContentService.createTextOutput("Publicidad Ignorada");
+  var valorNum = 0, comercio = "", producto = "", pestana = "";
 
-  var valorNum = 0;
-  var comercio = "";
-  var producto = ""; 
-  var nombrePestana = ""; // Elegir la hoja destino
+  // --- 1. BANCOLOMBIA ---
+  if (/bancolombia/i.test(texto + titulo)) {
 
-  // --- 1. PARA SMS BANCOLOMBIA
-  if (texto.includes("Bancolombia") || titulo.includes("Bancolombia")) {
-
-    // Caso A: Pago recibido a tarjeta de crédito (ej: desde Wompi-PSE)
+    // A. Pago recibido en tarjeta (Wompi-PSE, etc.)
     if (/recibimos pago por/i.test(texto)) {
-      var montoMatch = texto.match(/\$\s?([0-9.,]+)/);
-      if (!montoMatch) return ContentService.createTextOutput("Sin monto");
-
-      valorNum = parsearMonto(montoMatch[1]);
+      var m = texto.match(/\$\s?([0-9.,]+)/);
+      if (!m) return responder("Sin monto");
+      valorNum = parsearMonto(m[1]);
       comercio = "Pago Tarjeta Bancolombia";
       producto = "T.Credito Bancolombia";
-      nombrePestana = "Bancolombia";
+      pestana  = "Bancolombia";
 
-    // Caso B: Compra normal
+    // B. Compra normal
     } else {
-      var montoMatch = texto.match(/COP\s?([0-9.,]+)/);
-      if (!montoMatch) return ContentService.createTextOutput("Sin monto");
-
-      valorNum = parsearMonto(montoMatch[1]) * -1;
-
-      if (texto.includes(" en ") && texto.includes(" con ")) {
-        comercio = texto.split(" en ")[1].split(" con ")[0].trim();
-      } else {
-        comercio = "Transaccion Bancolombia";
-      }
-
+      var m = texto.match(/COP\s?([0-9.,]+)/);
+      if (!m) return responder("Sin monto");
+      valorNum = parsearMonto(m[1]) * -1;
+      comercio = (texto.includes(" en ") && texto.includes(" con "))
+        ? texto.split(" en ")[1].split(" con ")[0].trim()
+        : "Transaccion Bancolombia";
       producto = "T.Credito Bancolombia";
-      nombrePestana = "Bancolombia";
+      pestana  = "Bancolombia";
     }
-  }
 
-  // --- 2. PARA NOTIFICACIONES LULO
-  else {
-    var montoMatch = texto.match(/\$\s?([0-9.,]+)/);
-    if (!montoMatch) return ContentService.createTextOutput("Sin monto");
-    
-    valorNum = parsearMonto(montoMatch[1]);
+  // --- 2. LULO ---
+  } else {
+    var m = texto.match(/\$\s?([0-9.,]+)/);
+    if (!m) return responder("Sin monto");
+    valorNum = parsearMonto(m[1]);
 
-    var esEgreso = /envío|pagaste|compra|pago|PSE/i.test(titulo + texto);
+    var esEgreso  = /envío|pagaste|compra|pago|PSE/i.test(titulo + texto);
     var esIngreso = /recibiste|llegó/i.test(titulo + texto);
-    var esBreB = /bre-b/i.test(titulo + texto);
-    var esPSE = /PSE/i.test(titulo + texto);
+    var esBreB    = /bre-b/i.test(titulo + texto);
+    var esPSE     = /PSE/i.test(titulo + texto);
 
     if (esEgreso) valorNum *= -1;
 
-    // A. Caso PSE
+    // A. PSE
     if (esPSE && texto.includes(" - ")) {
       var partes = texto.split(" - ");
       comercio = partes[1] ? partes[1].replace(/\.$/, "").trim() : "Pago PSE";
-
-      // Si el pago PSE es hacia Bancolombia → marcar como pago de tarjeta
-      if (/bancolombia/i.test(comercio)) {
-        comercio = "Pago Tarjeta Bancolombia";
-      }
-
+      if (/bancolombia/i.test(comercio)) comercio = "Pago Tarjeta Bancolombia";
       producto = "Lulo Debito";
-    }
-    // B. Caso Transferencias
-    else if (esBreB || esIngreso || /envío/i.test(texto)) {
+
+    // B. Transferencias / Bre-B / Ingresos
+    } else if (esBreB || esIngreso || /envío/i.test(texto)) {
       var nMatch = texto.match(/(?:\s(?:a|de)\s)([^.$]+)/i);
       comercio = nMatch ? nMatch[1].split("Y lo mejor")[0].trim() : "Transferencia";
       producto = "Lulo Debito";
+
+    // C. Compra con tarjeta
+    } else if (texto.includes(" en ") && texto.includes(" con tu tarjeta")) {
+      var numTC = PropertiesService.getScriptProperties().getProperty("NumeroTarjeta");
+      comercio  = texto.split(" en ")[1].split(" con ")[0].trim();
+      producto  = RegExp(numTC, "i").test(texto) ? "T.Credito Lulo" : "T.Debito Lulo";
+
+    } else {
+      comercio = "Comercio Desconocido";
+      producto = "Lulo/Otros";
     }
-    // D. Caso Compras con Tarjeta de Crédito (notificación Lulo)
-    else if (texto.includes(" en ") && texto.includes(" con tu tarjeta")) {
-      var NumeroTarjeta = PropertiesService.getScriptProperties().getProperty("NumeroTarjeta")
-      comercio = texto.split(" en ")[1].split(" con ")[0].trim();
-      producto = RegExp(NumeroTarjeta, "i").test(texto) ? "T.Credito Lulo" : "T.Debito Lulo";
-    }
-    else {
-        comercio = "Comercio Desconocido";
-        producto = "Lulo/Otros";
-    }
-    
-    nombrePestana = "Lulo"; // Pestaña Lulo
+
+    pestana = "Lulo";
   }
 
-// --- 3. CLASIFICACIÓN CON GEMINI Y ESCRIBIR EN EL SHEETS ---
+  // --- 3. DEVOLUCIÓN ---
+  var esDevolucion = /devoluci[oó]n|devuelto|devolver|reembolso|reverso|reversi[oó]n|reversa|reintegro|contracargo/i
+    .test(texto + titulo + nota);
+  if (esDevolucion) valorNum = Math.abs(valorNum);
 
-  // Detección de devolución (cualquier forma)
-  var esDevolucion = /devoluci[oó]n|devuelto|devolver|reembolso|reverso|reversi[oó]n|reversa|reintegro|contracargo/i.test(texto + titulo + notaUsuario);
+  // --- 4. CATEGORIZACIÓN ---
+  var sheet    = ss.getSheetByName(pestana) || ss.getSheets()[0];
+  var categoria = esDevolucion
+    ? (buscarCategoriaEnSheet(sheet, comercio, valorNum) || obtenerCategoriaFinal(comercio, nota, valorNum))
+    : obtenerCategoriaFinal(comercio, nota, valorNum);
 
-  if (esDevolucion) {
-    valorNum = Math.abs(valorNum); // Forzar positivo
-  }
+  // --- 5. ESCRIBIR (lock solo al momento de escribir) ---
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  sheet.appendRow([fecha, valorNum, comercio, producto, nota, categoria.categoria, categoria.subcategoria]);
+  lock.releaseLock();
 
-  // Hoja correspondiente
-  var sheet = ss.getSheetByName(nombrePestana);
-  if (!sheet) {
-    sheet = ss.getSheets()[0];
-  }
-
-  var categoriaAsignada;
-
-  if (esDevolucion) {
-    // Busca en el sheet si hay un registro del mismo comercio y valor
-    var categoriaEncontrada = buscarCategoriaEnSheet(sheet, comercio, valorNum);
-    // Si no encuentra, clasifica con Gemini como respaldo
-    categoriaAsignada = categoriaEncontrada || obtenerCategoriaFinal(comercio, notaUsuario, valorNum);
-  } else {
-    categoriaAsignada = obtenerCategoriaFinal(comercio, notaUsuario, valorNum);
-  }
-  
-  sheet.appendRow([fecha, valorNum, comercio, producto, notaUsuario, categoriaAsignada.categoria, categoriaAsignada.subcategoria]);
-
-  lock.releaseLock(); 
-  return ContentService.createTextOutput("OK");
+  return responder("OK");
 }
 
+function responder(msg) {
+  return ContentService.createTextOutput(msg);
+}
+
+
+// ================================================
+// CATEGORIZACIÓN
+// ================================================
 function obtenerCategoriaFinal(comercio, nota, valorNum) {
-  var textoAAnalizar = (comercio + " " + nota).toUpperCase();
+  var texto = (comercio + " " + nota).toUpperCase();
 
-  // --- ZONA DE REGLAS FIJAS ---
-  if (textoAAnalizar.includes("TECNOQUIMICAS") || textoAAnalizar.includes("TQ")) {
-    if (valorNum > 0) {
-      return {categoria: "Ingreso", subcategoria: "Salario"}
-    } else {
-      return {categoria: "Tienda TQ", subcategoria: "Tienda TQ"};
-    }
-  }
+  // Reglas fijas (más rápidas que Gemini)
+  if (texto.includes("TECNOQUIMICAS") || texto.includes("TQ"))
+    return valorNum > 0
+      ? { categoria: "Ingreso",           subcategoria: "Salario"        }
+      : { categoria: "Tienda TQ",         subcategoria: "Tienda TQ"      };
 
-   if (textoAAnalizar.includes("PAGO TARJETA BANCOLOMBIA")) {
-    return {categoria: "Tarjeta de credito", subcategoria: "TC Bancolombia"};
-  }
+  if (texto.includes("PAGO TARJETA BANCOLOMBIA"))
+    return { categoria: "Tarjeta de credito", subcategoria: "TC Bancolombia" };
 
-  if (textoAAnalizar.includes("ASEO")) return {categoria: "Servicios", subcategoria: "Aseo"};
-  if (textoAAnalizar.includes("AVVILLAS")) return {categoria: "Casa", subcategoria: "Administración"};
-  if (textoAAnalizar.includes("EDS")) return {categoria: "Carro", subcategoria: "Gasolina"};
-  
-  // --- SI NO HAY REGLA, USA LA IA ---
+  if (texto.includes("ASEO"))    return { categoria: "Servicios", subcategoria: "Aseo"           };
+  if (texto.includes("AVVILLAS")) return { categoria: "Casa",      subcategoria: "Administración" };
+  if (texto.includes("EDS"))     return { categoria: "Carro",     subcategoria: "Gasolina"       };
+
+  // Sin regla fija → Gemini
   return clasificarConGemini(comercio, nota);
 }
 
 function clasificarConGemini(comercio, nota) {
   var apiKey = PropertiesService.getScriptProperties().getProperty("ApiKey");
-  
-  // CORRECCIÓN: Usar gemini-1.5-flash (la versión 2.5 no existe aún)
-  var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey;
+  var url    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey;
 
-  var estructuraCategorias = `
-  - Comida: Antojo, Cafe, Restaurante, Mercado
-  - Tienda TQ: Tienda TQ, TQ
-  - Compras: Regalos, Electronica, Ropa, Accesorios, Deporte
-  - Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena
-  - Casa: Administración, Mantenimiento, Arreglo
-  - Servicios: Internet, Emcali, Aseo, Gas
-  - Transporte: Taxi, Uber, Transporte publico
-  - Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina, Infracciones
-  - Entretenimiento: Alcohol, Salida, Concierto, Evento
-  - Viaje: Tiquete, Hotel, Airbnb, Hostal
-  - Suscripciones: Crunchyroll, Youtube, Google, Claude, Otro.
-  - Educación: General
-  - Hobbies: Salsa, Plantas, Ceramica, Ejercicio, Hobbies.
-  - Eventos: Cumpleaños, Matrimonio, Grados, Día especial
-  - Belleza: Uñas, Peluquería, Skincare
-  - Salud: Medico, Medicamento, Examenes
-  - Inversiones: Ale, Ahorro, Skandia
-  - Ingreso: Salario, Arriendo
-  - Tarjeta de credito: TC Bancolombia, TC Lulo
-  `;
+  var categorias =
+    "- Comida: Antojo, Cafe, Restaurante, Mercado\n" +
+    "- Tienda TQ: Tienda TQ, TQ\n" +
+    "- Compras: Regalos, Electronica, Ropa, Accesorios, Deporte\n" +
+    "- Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena\n" +
+    "- Casa: Administración, Mantenimiento, Arreglo\n" +
+    "- Servicios: Internet, Emcali, Aseo, Gas\n" +
+    "- Transporte: Taxi, Uber, Transporte publico\n" +
+    "- Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina, Infracciones\n" +
+    "- Entretenimiento: Alcohol, Salida, Concierto, Evento\n" +
+    "- Viaje: Tiquete, Hotel, Airbnb, Hostal\n" +
+    "- Suscripciones: Crunchyroll, Youtube, Google, Claude, Otro\n" +
+    "- Educación: General\n" +
+    "- Hobbies: Salsa, Plantas, Ceramica, Ejercicio, Hobbies\n" +
+    "- Eventos: Cumpleaños, Matrimonio, Grados, Día especial\n" +
+    "- Belleza: Uñas, Peluquería, Skincare\n" +
+    "- Salud: Medico, Medicamento, Examenes\n" +
+    "- Inversiones: Ale, Ahorro, Skandia\n" +
+    "- Ingreso: Salario, Arriendo\n" +
+    "- Tarjeta de credito: TC Bancolombia, TC Lulo";
 
-  var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
-               "ESTRUCTURA DE CATEGORÍAS (Formato: Categoría: Subcategoría1, Subcategoría2):\n" + estructuraCategorias + "\n\n" +
-               "DATOS DE LA TRANSACCIÓN:\n" +
-               "Comercio/Entidad: '" + comercio + "'\n" +
-               "Nota del usuario: '" + (nota || "Sin nota") + "'\n\n" +
-               "REGLAS:\n" +
-               "1. Analiza el comercio y la nota para deducir el gasto.\n" +
-               "2. Responde estrictamente en formato: Categoria | Subcategoria\n" +
-               "3. No uses puntos finales, ni explicaciones, ni negritas.\n" +
-               "4. Si la categoría no tiene subcategorías en la lista, usa el nombre de la categoría como subcategoría.\n" +
-               "5. Si no puedes identificarlo y no hay nota, busca el nombre del comercio en internet y agréga la categoría y subcategoría que crees que corresponda \n" +
-               "6. Si aún con la búsqueda no puedes identificarlo, responde: Compras | Compras";
-
-  var payload = {
-    "contents": [{"parts": [{"text": prompt}]}],
-    "generationConfig": {
-      "temperature": 0.1 // Temperatura baja para respuestas consistentes
-    }
-  };
+  var prompt =
+    "Clasifica este movimiento financiero en UNA subcategoría de la lista.\n\n" +
+    "CATEGORÍAS:\n" + categorias + "\n\n" +
+    "Comercio: '" + comercio + "'\n" +
+    "Nota: '" + (nota || "Sin nota") + "'\n\n" +
+    "Reglas:\n" +
+    "1. Responde SOLO en formato: Categoria | Subcategoria\n" +
+    "2. Sin puntos, explicaciones ni negritas.\n" +
+    "3. Si no identificas el comercio, búscalo en internet.\n" +
+    "4. Si aún así no puedes, responde: Compras | Compras";
 
   var options = {
-    "method": "post",
-    "contentType": "application/json",
-    "payload": JSON.stringify(payload),
-    "muteHttpExceptions": true // Para ver el error real si la API falla
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 }
+    }),
+    muteHttpExceptions: true
   };
 
   try {
     var response = UrlFetchApp.fetch(url, options);
-    var responseCode = response.getResponseCode();
-    var json = JSON.parse(response.getContentText());
+    var code     = response.getResponseCode();
+    var json     = JSON.parse(response.getContentText());
 
-    if (responseCode !== 200) {
-      Logger.log("Error de API (" + responseCode + "): " + JSON.stringify(json));
+    if (code !== 200) {
+      Logger.log("Error Gemini (" + code + "): " + JSON.stringify(json));
       return { categoria: "Error", subcategoria: "API" };
     }
 
-    var respuesta = json.candidates[0].content.parts[0].text.trim();
-    
-    // Limpiar respuesta de posibles caracteres extraños o saltos de línea
-    respuesta = respuesta.replace(/\n/g, "");
+    var partes = json.candidates[0].content.parts[0].text
+      .trim().replace(/\n/g, "").split("|");
 
-    var partes = respuesta.split("|");
-    
     return {
-      categoria: partes[0] ? partes[0].trim() : "Compras",
+      categoria:    partes[0] ? partes[0].trim() : "Compras",
       subcategoria: partes[1] ? partes[1].trim() : "Compras"
     };
 
-  } catch (e) {
-    Logger.log("ERROR CRÍTICO: " + e.toString());
+  } catch (err) {
+    Logger.log("ERROR Gemini: " + err.toString());
     return { categoria: "Compras", subcategoria: "Compras" };
   }
 }
 
+
+// ================================================
+// BÚSQUEDA EN SHEET PARA DEVOLUCIONES
+// ================================================
 function buscarCategoriaEnSheet(sheet, comercio, valor) {
-  var data = sheet.getDataRange().getValues();
-  var comercioNormalizado = comercio.trim().toLowerCase();
+  var data   = sheet.getDataRange().getValues();
+  var buscar = comercio.trim().toLowerCase();
 
-  // Recorre de más reciente a más antiguo buscando coincidencia
   for (var i = data.length - 1; i >= 0; i--) {
-    var filaComercio = String(data[i][2]).trim().toLowerCase(); // Columna C: comercio
-    var filaValor = Math.abs(parseFloat(data[i][1]));           // Columna B: valor absoluto
-
-    if (filaComercio === comercioNormalizado && Math.abs(filaValor - valor) < 1) {
-      return {
-        categoria: data[i][5],    // Columna F
-        subcategoria: data[i][6]  // Columna G
-      };
+    var filaComercio = String(data[i][2]).trim().toLowerCase();
+    var filaValor    = Math.abs(parseFloat(data[i][1]));
+    if (filaComercio === buscar && Math.abs(filaValor - valor) < 1) {
+      return { categoria: data[i][5], subcategoria: data[i][6] };
     }
   }
-  return null; // No encontró coincidencia
-}
-
-function testGemini() {
-  var resultado = clasificarConGemini("Uber *Trip", "Viaje a la oficina");
-  Logger.log(resultado); // Debería imprimir: {categoria: "Transporte", subcategoria: "Uber"}
+  return null;
 }
 
 
-function simularNotificacion() {
-  var url = PropertiesService.getScriptProperties().getProperty("url")
-
-  var payload = {
-    "texto": "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito",
-    "banco": "Compra realizada",
-    "nota": " "
-  };
-
-  var options = {
-    "method": "post",
-    "contentType": "application/json",
-    "payload": JSON.stringify(payload)
-  };
-
-  var response = UrlFetchApp.fetch(url, options);
-  Logger.log("Respuesta: " + response.getContentText());
-}
-
+// ================================================
+// PARSEO DE MONTOS (maneja , y . como miles/decimal)
+// ================================================
 function parsearMonto(str) {
   str = str.trim();
-  var tieneComa = str.includes(",");
+  var tieneComa  = str.includes(",");
   var tienePunto = str.includes(".");
 
-  // Si tiene ambos: el que está más a la derecha es el decimal
+  // Ambos separadores: el más a la derecha es el decimal
   if (tieneComa && tienePunto) {
-    if (str.lastIndexOf(",") > str.lastIndexOf(".")) {
-      // Formato europeo: 1.234.567,89
-      return parseFloat(str.replace(/\./g, "").replace(",", "."));
-    } else {
-      // Formato americano: 1,234,567.89
-      return parseFloat(str.replace(/,/g, ""));
-    }
+    return str.lastIndexOf(",") > str.lastIndexOf(".")
+      ? parseFloat(str.replace(/\./g, "").replace(",", "."))  // europeo:  1.234,56
+      : parseFloat(str.replace(/,/g, ""));                    // americano: 1,234.56
   }
-
-  // Solo comas: si la última parte tiene 1-2 dígitos → es decimal (ej: 762,90)
+  // Solo comas: 2 dígitos al final = decimal, sino = miles
   if (tieneComa) {
     var partes = str.split(",");
-    var ultima = partes[partes.length - 1];
-    if (partes.length === 2 && ultima.length <= 2) {
-      return parseFloat(str.replace(",", "."));
-    }
-    return parseFloat(str.replace(/,/g, "")); // Miles
+    return (partes.length === 2 && partes[1].length <= 2)
+      ? parseFloat(str.replace(",", "."))
+      : parseFloat(str.replace(/,/g, ""));
   }
-
-  // Solo puntos: si la última parte tiene 1-2 dígitos → es decimal (ej: 762.90)
+  // Solo puntos: 2 dígitos al final = decimal, sino = miles
   if (tienePunto) {
     var partes = str.split(".");
-    var ultima = partes[partes.length - 1];
-    if (partes.length === 2 && ultima.length <= 2) {
-      return parseFloat(str);
-    }
-    return parseFloat(str.replace(/\./g, "")); // Miles
+    return (partes.length === 2 && partes[1].length <= 2)
+      ? parseFloat(str)
+      : parseFloat(str.replace(/\./g, ""));
   }
 
   return parseFloat(str);
+}
+
+
+// ================================================
+// TESTS
+// ================================================
+function runTests() {
+  Logger.log("========== 🧪 INICIO DE TESTS ==========");
+  _testParsearMonto();
+  _testCategorias();
+  _testNotificaciones();
+  Logger.log("=========================================");
+}
+
+function _testParsearMonto() {
+  Logger.log("\n--- parsearMonto ---");
+  var casos = [
+    { input: "2,606,189.00", esperado: 2606189,  label: "Americano con decimales  " },
+    { input: "2.606.189",    esperado: 2606189,  label: "Europeo sin decimales    " },
+    { input: "50.000,90",    esperado: 50000.9,  label: "Europeo con decimales    " },
+    { input: "762,90",       esperado: 762.9,    label: "Coma decimal (2 dígitos) " },
+    { input: "762904",       esperado: 762904,   label: "Sin separadores          " },
+    { input: "1.500",        esperado: 1500,     label: "Punto miles (3 dígitos)  " },
+    { input: "1.50",         esperado: 1.5,      label: "Punto decimal (2 dígitos)" },
+  ];
+  casos.forEach(function(c) {
+    var resultado = parsearMonto(c.input);
+    var ok = Math.abs(resultado - c.esperado) < 0.01;
+    Logger.log((ok ? "✅" : "❌") + " " + c.label + ": '" + c.input + "' → " + resultado +
+      (ok ? "" : "   ⚠️ esperado: " + c.esperado));
+  });
+}
+
+function _testCategorias() {
+  Logger.log("\n--- obtenerCategoriaFinal (reglas fijas) ---");
+  var casos = [
+    { comercio: "TECNOQUIMICAS SA",         nota: "", valor:  5000000, cat: "Ingreso",           sub: "Salario"        },
+    { comercio: "Tienda TQ oficina",        nota: "", valor: -50000,   cat: "Tienda TQ",         sub: "Tienda TQ"      },
+    { comercio: "Pago Tarjeta Bancolombia", nota: "", valor:  2606189, cat: "Tarjeta de credito", sub: "TC Bancolombia" },
+    { comercio: "EDS La 14",               nota: "", valor: -80000,   cat: "Carro",             sub: "Gasolina"       },
+    { comercio: "Conjunto AVVILLAS",        nota: "", valor: -300000,  cat: "Casa",              sub: "Administración" },
+  ];
+  casos.forEach(function(c) {
+    var res = obtenerCategoriaFinal(c.comercio, c.nota, c.valor);
+    var ok  = res.categoria === c.cat && res.subcategoria === c.sub;
+    Logger.log((ok ? "✅" : "❌") + " " + c.comercio + " → " + res.categoria + " | " + res.subcategoria +
+      (ok ? "" : "   ⚠️ esperado: " + c.cat + " | " + c.sub));
+  });
+}
+
+function _testNotificaciones() {
+  Logger.log("\n--- Simulación de notificaciones ---");
+  var url = PropertiesService.getScriptProperties().getProperty("url");
+  var casos = [
+    { label: "Lulo - Compra TC",          texto: "$762.904 en CLAUDE.AI SUBSCRIPTION con tu tarjeta de crédito", banco: "Compra realizada",         nota: ""          },
+    { label: "Lulo - PSE a Bancolombia",  texto: "$2.606.189 - Bancolombia Sa.",                                  banco: "Tu pago PSE fue exitoso",  nota: ""          },
+    { label: "Lulo - Transferencia",      texto: "Enviaste $150.000 a Juan Perez.",                 banco: "Envío exitoso",            nota: ""          },
+    { label: "Lulo - Ingreso",            texto: "Recibiste $200.000 de Maria Lopez",                             banco: "Llegó una transferencia",  nota: ""          },
+    { label: "Lulo - Devolución",         texto: "Devolución de $50.000 de Rappi",                                banco: "Reembolso recibido",       nota: ""          },
+    { label: "Bancolombia - Compra COP",  texto: "Bancolombia: Compra por COP 50.000 en RAPPI con Tarjeta",      banco: "Bancolombia",              nota: ""          },
+    { label: "Bancolombia - Pago PSE",    texto: "Bancolombia: Recibimos pago por $1,206,189.00 a tu tarjeta de credito desde Wompi-PSE", banco: "Bancolombia", nota: "" },
+    { label: "Filtro - Cancelar",         texto: "$50.000 en Starbucks con tu tarjeta",                           banco: "Compra realizada",         nota: "cancelar"  },
+    { label: "Filtro - Publicidad",       texto: "Aprovecha tu crédito preaprobado",                              banco: "Lulo",                     nota: ""          },
+    { label: "Filtro - Transacción negada", texto: "Transacción rechazada por fondos insuficientes",              banco: "Lulo",                     nota: ""          },
+  ];
+  casos.forEach(function(c) {
+    var options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({ texto: c.texto, banco: c.banco, nota: c.nota }),
+      muteHttpExceptions: true
+    };
+    try {
+      var res = UrlFetchApp.fetch(url, options);
+      Logger.log("📨 " + c.label + " → " + res.getContentText());
+    } catch (err) {
+      Logger.log("❌ " + c.label + " → ERROR: " + err.toString());
+    }
+  });
 }
