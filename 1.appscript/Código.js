@@ -1,6 +1,4 @@
-// ================================================
 // MAIN: Recibe notificación y registra en Sheets
-// ================================================
 function doPost(e) {
   var ss = SpreadsheetApp.openById(
     PropertiesService.getScriptProperties().getProperty("idArchivo")
@@ -23,7 +21,7 @@ function doPost(e) {
   var valorNum = 0, comercio = "", producto = "", pestana = "";
 
   // --- 1. BANCOLOMBIA ---
-  if (/bancolombia/i.test(titulo)) {
+  if (/bancolombia/i.test(texto)) {
 
     // A. Pago recibido en tarjeta (Wompi-PSE, etc.)
     if (/recibimos pago por/i.test(texto)) {
