@@ -10,13 +10,13 @@ Lulo <- read_sheet(Sys.getenv("SHEETS_ID"), sheet = 'Lulo')
 compare_df_cols(Bancolombia, Lulo)
 
 # Uno las bases
-transactions <- bind_rows(Bancolombia, Lulo)
+transacciones <- bind_rows(Bancolombia, Lulo)
 
-compare_df_cols(transactions)
-lapply(transactions, function(x) 
-  {sort(unique(x))})
+compare_df_cols(transacciones)
+lapply(transacciones, function(x) 
+{sort(unique(x))})
 
-transactions <- transactions %>% 
+transacciones <- transacciones %>% 
   mutate(producto = case_when(
     Producto == 'T.Credito Bancolombia' ~ 'Bancolombia',
     .default = 'Lulo Bank'
@@ -26,39 +26,9 @@ transactions <- transactions %>%
     .default = 'Debito'
   ))
 
-transactions$Subcategoria <- gsub("medicamento", "Medicamento", transactions$Subcategoria)
-
-# Creo mis db
-
-paste(unique(Bancolombia$Categoria), collapse = "', '")
-categories <- data.frame(
-  cat_name = c("Comida", "Tienda TQ", "Compras", "Tequi", "Casa", "Servicios", 
-               "Transporte", "Carro", "Entretenimiento", "Viaje", "Suscripciones", 
-               "Educación", "Hobbies", "Eventos", "Belleza", "Salud", 
-               "Inversiones", "Ingreso", "Tarjeta de credito")
-)
-
-subcategories <- transactions %>% 
-  left_join(cat, join_by(Categoria == cat_name)) %>% 
-  select(Subcategoria, cat_id) %>% 
-  rename(subcat_name = Subcategoria) %>% 
-  distinct(subcat_name, cat_id)
-
-paste(unique(transactions$Producto), collapse = "', '")
-account <- transactions %>% 
-  distinct(producto, cuenta) %>% 
-  rename(acc_name = producto,
-         acc_type = cuenta)
-
-months <- seq(as.Date("2026-01-17"), by = "month", length.out = 5)
-categories <- unlist(cat$cat_id)
-month_combinations <- expand.grid(months, categories) %>% 
-  rename(month = Var1,
-         cat_id = Var2)
-class(month_combinations$month)
+transacciones$Subcategoria <- gsub("medicamento", "Medicamento", transacciones$Subcategoria)
 
 # Creo mis variables .env
-usethis::edit_r_environ()
 
 host <- Sys.getenv("SUPABASE_HOST")
 port <- as.integer(Sys.getenv("SUPABASE_PORT"))
@@ -79,14 +49,71 @@ con <- dbConnect(
   password = password
 )
 
-dbWriteTable(con, 'categories', categories, append = TRUE)
-dbWriteTable(con, 'subcategories', subcategories, append = TRUE)
-dbWriteTable(con, 'accounts', account, append = TRUE)
-
-cat <- dbReadTable(con, "categories")
-subcat <- dbReadTable(con, "subcategories")
-acc <- dbReadTable(con, "accounts")
-
 # Verifico la conexión
 dbListTables(con)
+
+# Creo y subo las tablas
+
+## Creo categories
+
+categories <- data.frame(
+  cat_name = c("Comida", "Tienda TQ", "Compras", "Tequi", "Casa", "Servicios", 
+               "Transporte", "Carro", "Entretenimiento", "Viaje", "Suscripciones", 
+               "Educación", "Hobbies", "Eventos", "Belleza", "Salud", 
+               "Inversiones", "Ingreso", "Tarjeta de credito")
+)
+
+## Subo categories y verifico
+
+dbWriteTable(con, 'categories', categories, append = TRUE)
+cat <- dbReadTable(con, "categories")
+
+## Creo subcategories
+
+subcategories <- transacciones %>% 
+  left_join(cat, join_by(Categoria == cat_name)) %>% 
+  select(Subcategoria, cat_id) %>% 
+  rename(subcat_name = Subcategoria) %>% 
+  distinct(subcat_name, cat_id)
+
+## Subo subcategories y verifico
+
+dbWriteTable(con, 'subcategories', subcategories, append = TRUE)
+subcat <- dbReadTable(con, "subcategories")
+
+## Creo account
+
+account <- transacciones %>% 
+  distinct(producto, cuenta) %>% 
+  rename(acc_name = producto,
+         acc_type = cuenta)
+
+## Subo account y verifico
+
+dbWriteTable(con, 'accounts', account, append = TRUE)
+acc <- dbReadTable(con, "accounts")
+
+## Creo transactions
+
+transactions <- transacciones %>% 
+  rename(date = Fecha,
+         amount = Valor,
+         store = Comercio,
+         note = Nota) %>% 
+  left_join(acc, join_by(producto == acc_name, cuenta == acc_type))
+
+transactions <- transactions %>% 
+  left_join(cat, join_by(Categoria == cat_name))
+
+transactions <- transactions %>% 
+  left_join(subcat %>% select(subcat_id, cat_id, subcat_name), 
+            join_by(Subcategoria == subcat_name, cat_id == cat_id)) %>% 
+  select(date, amount, store, note, cat_id, subcat_id, acc_id)
+
+## Subo transactions y verifico
+
+dbWriteTable(con, 'transactions', transactions, append = TRUE)
+trx <- dbReadTable(con, "transactions")
+
+# Me desconecto
 dbDisconnect(con)
