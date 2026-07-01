@@ -1,4 +1,6 @@
+// ================================================
 // MAIN: Recibe notificación y registra en Sheets
+// ================================================
 function doPost(e) {
   var ss = SpreadsheetApp.openById(
     PropertiesService.getScriptProperties().getProperty("idArchivo")
@@ -21,7 +23,7 @@ function doPost(e) {
   var valorNum = 0, comercio = "", producto = "", pestana = "";
 
   // --- 1. BANCOLOMBIA ---
-  if (/bancolombia/i.test(texto)) {
+  if (/bancolombia/i.test(titulo)) {
 
     // A. Pago recibido en tarjeta (Wompi-PSE, etc.)
     if (/recibimos pago por/i.test(texto)) {
@@ -132,9 +134,36 @@ function obtenerCategoriaFinal(comercio, nota, valorNum) {
   return clasificarConGemini(comercio, nota);
 }
 
+// ================================================
+// ERROR LOGGING
+// ================================================
+function logError(fuente, codigo, mensaje, datos) {
+  try {
+    var ss = SpreadsheetApp.openById(
+      PropertiesService.getScriptProperties().getProperty("idArchivo")
+    );
+    var logSheet = ss.getSheetByName("ErrorLog");
+    if (!logSheet) {
+      logSheet = ss.insertSheet("ErrorLog");
+      logSheet.appendRow(["Fecha", "Fuente", "Código HTTP", "Mensaje", "Datos"]);
+      logSheet.getRange(1, 1, 1, 5).setFontWeight("bold");
+    }
+    logSheet.appendRow([
+      new Date(),
+      fuente,
+      codigo || "",
+      mensaje,
+      datos ? JSON.stringify(datos) : ""
+    ]);
+  } catch (e) {
+    Logger.log("No se pudo escribir en ErrorLog: " + e.toString());
+  }
+}
+
+
 function clasificarConGemini(comercio, nota) {
   var apiKey = PropertiesService.getScriptProperties().getProperty("ApiKey");
-  var url    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey;
+  var MODELOS = ["gemini-2.5-flash-lite", "gemini-2.0-flash"];
 
   var categorias =
     "- Comida: Antojo, Cafe, Restaurante, Mercado\n" +
@@ -180,28 +209,36 @@ function clasificarConGemini(comercio, nota) {
     muteHttpExceptions: true
   };
 
-  try {
-    var response = UrlFetchApp.fetch(url, options);
-    var code     = response.getResponseCode();
-    var json     = JSON.parse(response.getContentText());
+  for (var i = 0; i < MODELOS.length; i++) {
+    var modelo = MODELOS[i];
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent?key=" + apiKey;
 
-    if (code !== 200) {
-      Logger.log("Error Gemini (" + code + "): " + JSON.stringify(json));
-      return { categoria: "Error", subcategoria: "API" };
+    try {
+      var response = UrlFetchApp.fetch(url, options);
+      var code     = response.getResponseCode();
+      var json     = JSON.parse(response.getContentText());
+
+      if (code !== 200) {
+        Logger.log("Error Gemini/" + modelo + " (" + code + "): " + JSON.stringify(json));
+        logError("Gemini/" + modelo, code, JSON.stringify(json), { comercio: comercio, nota: nota });
+        continue;
+      }
+
+      var partes = json.candidates[0].content.parts[0].text
+        .trim().replace(/\n/g, "").split("|");
+
+      return {
+        categoria:    partes[0] ? partes[0].trim() : "Compras",
+        subcategoria: partes[1] ? partes[1].trim() : "Compras"
+      };
+
+    } catch (err) {
+      Logger.log("EXCEPCION Gemini/" + modelo + ": " + err.toString());
+      logError("Gemini/" + modelo, "EXCEPTION", err.toString(), { comercio: comercio, nota: nota });
     }
-
-    var partes = json.candidates[0].content.parts[0].text
-      .trim().replace(/\n/g, "").split("|");
-
-    return {
-      categoria:    partes[0] ? partes[0].trim() : "Compras",
-      subcategoria: partes[1] ? partes[1].trim() : "Compras"
-    };
-
-  } catch (err) {
-    Logger.log("ERROR Gemini: " + err.toString());
-    return { categoria: "Compras", subcategoria: "Compras" };
   }
+
+  return { categoria: "Compras", subcategoria: "Compras" };
 }
 
 
