@@ -23,7 +23,7 @@ function doPost(e) {
   var valorNum = 0, comercio = "", producto = "", pestana = "";
 
   // --- 1. BANCOLOMBIA ---
-  if (/bancolombia/i.test(titulo)) {
+  if (/bancolombia/i.test(texto + titulo)) {
 
     // A. Pago recibido en tarjeta (Wompi-PSE, etc.)
     if (/recibimos pago por/i.test(texto)) {
@@ -163,7 +163,7 @@ function logError(fuente, codigo, mensaje, datos) {
 
 function clasificarConGemini(comercio, nota) {
   var apiKey = PropertiesService.getScriptProperties().getProperty("ApiKey");
-  var MODELOS = ["gemini-2.5-flash-lite", "gemini-2.0-flash"];
+  var MODELOS = ["gemini-2.5-flash-lite", "gemini-flash-lite-latest"];
 
   var categorias =
     "- Comida: Antojo, Cafe, Restaurante, Mercado\n" +
