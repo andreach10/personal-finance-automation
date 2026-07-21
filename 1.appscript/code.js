@@ -118,16 +118,14 @@ function obtenerCategoriaFinal(comercio, nota, valorNum) {
   var texto = (comercio + " " + nota).toUpperCase();
 
   // Reglas fijas (más rápidas que Gemini)
-  if (texto.includes("TECNOQUIMICAS") || texto.includes("TQ"))
-    return valorNum > 0
-      ? { categoria: "Ingreso",  subcategoria: "Salario"        }
-      : { categoria: "Tienda TQ",subcategoria: "Tienda TQ"      };
+  if (texto.includes("TECNOQUIMICAS") && valorNum > 0)
+    return { categoria: "Ingreso", subcategoria: "Salario" };
 
   if (texto.includes("PAGO TARJETA BANCOLOMBIA"))
     return { categoria: "Tarjeta de credito", subcategoria: "TC Bancolombia" };
 
   if (texto.includes("ASEO"))    return { categoria: "Servicios", subcategoria: "Aseo"  };
-  if (texto.includes("AVVILLAS")) return { categoria: "Casa",      subcategoria: "Administración" };
+  if (texto.includes("AVVILLAS")) return { categoria: "Casa",      subcategoria: "Administracion" };
   if (texto.includes("EDS"))     return { categoria: "Carro",     subcategoria: "Gasolina"       };
 
   // Sin regla fija → Gemini
@@ -170,17 +168,17 @@ function clasificarConGemini(comercio, nota) {
     "- Tienda TQ: Tienda TQ, TQ\n" +
     "- Compras: Regalos, Electronica, Ropa, Accesorios, Deporte\n" +
     "- Tequi: Alimento, Snack, Veterinario, Juguete, Accesorio, Arena\n" +
-    "- Casa: Administración, Mantenimiento, Arreglo\n" +
+    "- Casa: Administracion, Mantenimiento, Arreglo\n" +
     "- Servicios: Internet, Emcali, Aseo, Gas\n" +
     "- Transporte: Taxi, Uber, Transporte publico\n" +
     "- Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina, Infracciones, Peajes\n" +
     "- Entretenimiento: Alcohol, Salida, Concierto, Evento\n" +
     "- Viaje: Tiquete, Hotel, Airbnb, Hostal\n" +
     "- Suscripciones: Crunchyroll, Youtube, Google, Claude, Otro\n" +
-    "- Educación: General\n" +
+    "- Educacion: General\n" +
     "- Hobbies: Salsa, Plantas, Ceramica, Ejercicio, Hobbies\n" +
-    "- Eventos: Cumpleaños, Matrimonio, Grados, Día especial\n" +
-    "- Belleza: Uñas, Peluquería, Skincare\n" +
+    "- Eventos: Cumpleaños, Matrimonio, Grados, Dia especial\n" +
+    "- Belleza: Uñas, Peluqueria, Skincare\n" +
     "- Salud: Medico, Medicamento, Examenes, Psicologia\n" +
     "- Inversiones: Ale, Ahorro, Skandia\n" +
     "- Ingreso: Salario, Arriendo\n" +
@@ -333,7 +331,7 @@ function _testCategorias() {
     { comercio: "Tienda TQ oficina",        nota: "", valor: -50000,   cat: "Tienda TQ",         sub: "Tienda TQ"      },
     { comercio: "Pago Tarjeta Bancolombia", nota: "", valor:  2606189, cat: "Tarjeta de credito", sub: "TC Bancolombia" },
     { comercio: "EDS La 14",               nota: "", valor: -80000,   cat: "Carro",             sub: "Gasolina"       },
-    { comercio: "Conjunto AVVILLAS",        nota: "", valor: -300000,  cat: "Casa",              sub: "Administración" },
+    { comercio: "Conjunto AVVILLAS",        nota: "", valor: -300000,  cat: "Casa",              sub: "Administracion" },
   ];
   casos.forEach(function(c) {
     var res = obtenerCategoriaFinal(c.comercio, c.nota, c.valor);
