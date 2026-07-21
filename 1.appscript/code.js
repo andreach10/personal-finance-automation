@@ -173,7 +173,7 @@ function clasificarConGemini(comercio, nota) {
     "- Casa: Administración, Mantenimiento, Arreglo\n" +
     "- Servicios: Internet, Emcali, Aseo, Gas\n" +
     "- Transporte: Taxi, Uber, Transporte publico\n" +
-    "- Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina, Infracciones\n" +
+    "- Carro: SOAT, Tecnomecanica, Mantenimiento, Parqueadero, Gasolina, Infracciones, Peajes\n" +
     "- Entretenimiento: Alcohol, Salida, Concierto, Evento\n" +
     "- Viaje: Tiquete, Hotel, Airbnb, Hostal\n" +
     "- Suscripciones: Crunchyroll, Youtube, Google, Claude, Otro\n" +
@@ -181,9 +181,12 @@ function clasificarConGemini(comercio, nota) {
     "- Hobbies: Salsa, Plantas, Ceramica, Ejercicio, Hobbies\n" +
     "- Eventos: Cumpleaños, Matrimonio, Grados, Día especial\n" +
     "- Belleza: Uñas, Peluquería, Skincare\n" +
-    "- Salud: Medico, Medicamento, Examenes\n" +
+    "- Salud: Medico, Medicamento, Examenes, Psicologia\n" +
     "- Inversiones: Ale, Ahorro, Skandia\n" +
     "- Ingreso: Salario, Arriendo\n" +
+    "- Trabajo: Seguridad Social\n" +
+    "- Cabras: Venta, Costo, Dividendo\n" +
+    "- Transferencias: Sin clasificar, Compras a otros, Efectivo\n" +
     "- Tarjeta de credito: TC Bancolombia, TC Lulo";
 
   var prompt = "Eres un asistente financiero experto. Tu tarea es clasificar un movimiento financiero en UNA SOLA subcategoría de la lista provista.\n\n" +
