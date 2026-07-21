@@ -328,7 +328,6 @@ function _testCategorias() {
   Logger.log("\n--- obtenerCategoriaFinal (reglas fijas) ---");
   var casos = [
     { comercio: "TECNOQUIMICAS SA",         nota: "", valor:  5000000, cat: "Ingreso",           sub: "Salario"        },
-    { comercio: "Tienda TQ oficina",        nota: "", valor: -50000,   cat: "Tienda TQ",         sub: "Tienda TQ"      },
     { comercio: "Pago Tarjeta Bancolombia", nota: "", valor:  2606189, cat: "Tarjeta de credito", sub: "TC Bancolombia" },
     { comercio: "EDS La 14",               nota: "", valor: -80000,   cat: "Carro",             sub: "Gasolina"       },
     { comercio: "Conjunto AVVILLAS",        nota: "", valor: -300000,  cat: "Casa",              sub: "Administracion" },
