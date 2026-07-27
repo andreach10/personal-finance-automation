@@ -56,12 +56,9 @@ dbListTables(con)
 
 ## Creo categories
 
-categories <- data.frame(
-  cat_name = c("Comida", "Tienda TQ", "Compras", "Tequi", "Casa", "Servicios", 
-               "Transporte", "Carro", "Entretenimiento", "Viaje", "Suscripciones", 
-               "Educación", "Hobbies", "Eventos", "Belleza", "Salud", 
-               "Inversiones", "Ingreso", "Tarjeta de credito")
-)
+categories <- transacciones %>%
+    distinct(Categoria) %>%
+    rename(cat_name = Categoria)
 
 ## Subo categories y verifico
 
@@ -119,9 +116,10 @@ transactions <- transactions %>%
 ## Subo transactions y verifico
 
 base <- dbReadTable(con, "transactions")
-nuevas <- anti_join(transactions, base, join_by(date == date))
+transactions <- transactions %>% mutate(date_key = format(date, "%Y-%m-%d %H:%M:%S"))
+base <- base %>% mutate(date_key = format(date, "%Y-%m-%d %H:%M:%S"))
+nuevas <- anti_join(transactions, base, join_by(date_key)) %>% select(-date_key)
 dbWriteTable(con, 'transactions', nuevas, append = TRUE)
-trx <- dbReadTable(con, "transactions")
 
 # Me desconecto
 dbDisconnect(con)
