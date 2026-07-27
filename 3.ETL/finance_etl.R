@@ -65,7 +65,9 @@ categories <- data.frame(
 
 ## Subo categories y verifico
 
-dbWriteTable(con, 'categories', categories, append = TRUE)
+base_cat <- dbReadTable(con, "categories")
+nuevas_cat <- anti_join(categories, base_cat, join_by(cat_name))
+dbWriteTable(con, 'categories', nuevas_cat, append = TRUE)
 cat <- dbReadTable(con, "categories")
 
 ## Creo subcategories
@@ -78,19 +80,23 @@ subcategories <- transacciones %>%
 
 ## Subo subcategories y verifico
 
-dbWriteTable(con, 'subcategories', subcategories, append = TRUE)
+base_subcat <- dbReadTable(con, "subcategories")
+nuevas_subcat <- anti_join(subcategories, base_subcat, join_by(subcat_name == subcat_name, cat_id == cat_id))
+dbWriteTable(con, 'subcategories', nuevas_subcat, append = TRUE)
 subcat <- dbReadTable(con, "subcategories")
 
 ## Creo account
 
-account <- transacciones %>% 
+accounts <- transacciones %>% 
   distinct(producto, cuenta) %>% 
   rename(acc_name = producto,
          acc_type = cuenta)
 
 ## Subo account y verifico
 
-dbWriteTable(con, 'accounts', account, append = TRUE)
+base_acc <- dbReadTable(con, "accounts")
+nuevas_acc <- anti_join(accounts, base_acc, join_by(acc_name, acc_type))
+dbWriteTable(con, 'accounts', nuevas_acc, append = TRUE)
 acc <- dbReadTable(con, "accounts")
 
 ## Creo transactions
@@ -112,7 +118,9 @@ transactions <- transactions %>%
 
 ## Subo transactions y verifico
 
-dbWriteTable(con, 'transactions', transactions, append = TRUE)
+base <- dbReadTable(con, "transactions")
+nuevas <- anti_join(transactions, base, join_by(date == date))
+dbWriteTable(con, 'transactions', nuevas, append = TRUE)
 trx <- dbReadTable(con, "transactions")
 
 # Me desconecto
