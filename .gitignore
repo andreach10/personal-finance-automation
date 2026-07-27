@@ -2,3 +2,6 @@
 # Added by ggshield
 .cache_ggshield
 .Renviron
+
+# Service account key para googlesheets4 (¡secreto!)
+gs4-service-account.json

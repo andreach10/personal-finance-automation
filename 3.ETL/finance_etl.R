@@ -2,6 +2,9 @@ library(googlesheets4)
 library(janitor)
 library(tidyverse)
 
+#Autenticarse
+gs4_auth(path = "gs4-service-account.json")
+
 # Importo los datos con el API de Tidyverse
 Bancolombia <- read_sheet(Sys.getenv("SHEETS_ID"), sheet = 'Bancolombia')
 Lulo <- read_sheet(Sys.getenv("SHEETS_ID"), sheet = 'Lulo')

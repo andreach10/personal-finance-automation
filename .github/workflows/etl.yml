@@ -1,0 +1,39 @@
+name: ETL diario
+
+on:
+  schedule:
+    - cron: '0 11 * * *'      # 11:00 UTC = 6:00 am Colombia. Cambia el 11 por otra hora UTC si quieres.
+  workflow_dispatch:           # permite correrlo a mano desde la pestaña Actions
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      - name: Instalar R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Instalar paquetes de R
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::googlesheets4
+            any::janitor
+            any::tidyverse
+            any::DBI
+            any::RPostgres
+
+      - name: Reconstruir la llave del robot
+        run: echo '${{ secrets.GS4_SERVICE_ACCOUNT }}' > gs4-service-account.json
+
+      - name: Correr el ETL
+        env:
+          SHEETS_ID: ${{ secrets.SHEETS_ID }}
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
+          SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
+          SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
+          SUPABASE_PW: ${{ secrets.SUPABASE_PW }}
+        run: Rscript 3.ETL/finance_etl.R
