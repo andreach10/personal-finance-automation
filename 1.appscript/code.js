@@ -22,6 +22,10 @@ function doPost(e) {
 
   var valorNum = 0, comercio = "", producto = "", pestana = "";
 
+  // Últimos 4 dígitos de la tarjeta (Bancolombia: "... T.Cred *1234 ...")
+  var mTarjeta = texto.match(/T\.\w+\s?\*(\d{4})/i);
+  var ultimos4 = mTarjeta ? mTarjeta[1] : "";
+
   // --- 1. BANCOLOMBIA ---
   if (/bancolombia/i.test(texto + titulo)) {
 
@@ -100,7 +104,7 @@ function doPost(e) {
   // --- 5. ESCRIBIR (lock solo al momento de escribir) ---
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
-  sheet.appendRow([fecha, valorNum, comercio, producto, nota, categoria.categoria, categoria.subcategoria]);
+  sheet.appendRow([fecha, valorNum, comercio, producto, nota, categoria.categoria, categoria.subcategoria, ultimos4]);
   lock.releaseLock();
 
   return responder("OK");
