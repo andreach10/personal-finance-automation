@@ -14,6 +14,14 @@ function doPost(e) {
 
   Logger.log("TEXTO: " + texto + " | TITULO: " + titulo);
 
+  // --- CAPA RAW: guardar la notificación cruda ANTES de filtrar/parsear ---
+  var rawSheet = ss.getSheetByName("raw");
+  if (!rawSheet) {
+    rawSheet = ss.insertSheet("raw");
+    rawSheet.appendRow(["Fecha", "Texto", "Banco", "Nota", "RawJSON"]);
+  }
+  rawSheet.appendRow([fecha, texto, titulo, nota, e.postData.contents]);
+
   // --- 0. FILTROS ---
   if (/cancelar/i.test(nota))    return responder("Cancelado por usuario");
   if (/rechaz|negad|fallid/i.test(titulo + texto)) return responder("Rechazado");
