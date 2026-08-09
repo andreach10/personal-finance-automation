@@ -16,10 +16,8 @@ compare_df_cols(Bancolombia, Lulo)
 transacciones <- bind_rows(Bancolombia, Lulo)
 
 compare_df_cols(transacciones)
-lapply(transacciones, function(x) 
-{sort(unique(x))})
 
-transacciones <- transacciones %>% 
+transacciones <- transacciones %>%
   mutate(producto = case_when(
     Producto == 'T.Credito Bancolombia' ~ 'Bancolombia',
     .default = 'Lulo Bank'
