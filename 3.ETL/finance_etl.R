@@ -13,7 +13,12 @@ Lulo <- read_sheet(Sys.getenv("SHEETS_ID"), sheet = 'Lulo')
 compare_df_cols(Bancolombia, Lulo)
 
 # Uno las bases
-transacciones <- bind_rows(Bancolombia, Lulo)
+# ponytail: una celda mal digitada (un número donde va texto) llega como list-col
+# y rompe bind_rows. Aplano cualquier list-col a texto antes de unir.
+aplanar <- function(df) mutate(df, across(where(is.list),
+  ~ map_chr(.x, \(v) if (length(v)) as.character(v) else NA_character_)))
+
+transacciones <- bind_rows(aplanar(Bancolombia), aplanar(Lulo))
 
 compare_df_cols(transacciones)
 
